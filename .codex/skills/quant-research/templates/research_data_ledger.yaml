@@ -1,0 +1,39 @@
+ledger_version: "1.0"
+strategy_id: ""
+hypothesis_id: ""
+created_at: ""
+updated_at: ""
+datasets:
+  - dataset_id: ""
+    symbols: []
+    timeframe: ""
+    date_range: ""
+    timezone: ""
+    source_path: ""
+    data_hash: ""
+    row_count: null
+    evidence_role: "discovery_train"  # discovery_train | development_validation | locked_final_holdout | wf_oos | forward_live | diagnostic_only | legacy_unverified
+    usage_type: "hypothesis_generation"
+    research_stage: "hypothesis"
+    consumed: false
+    use_count: 0
+    first_used_at: null
+    last_used_at: null
+    used_by: []
+    notes: ""
+usage_events:
+  - event_id: ""
+    timestamp: ""
+    actor: ""
+    research_stage: ""
+    action: ""
+    datasets_read: []
+    datasets_consumed: []
+    output_files: []
+    decision: ""
+    notes: ""
+guard_state:
+  locked_final_holdout_opened: false
+  locked_final_holdout_opened_at: null
+  locked_final_holdout_evaluated_version: null
+  forward_framework_start_time: null

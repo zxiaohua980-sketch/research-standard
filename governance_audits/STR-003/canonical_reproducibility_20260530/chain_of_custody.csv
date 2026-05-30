@@ -1,0 +1,11 @@
+﻿stage,artifact,path_or_source,declared_or_observed_commit,next_link,status,note
+research,event_study,D:\MT5\openclaw\bb_strategy\output\reports\v0.1\event_study_report.md,d8a8e88,event study -> execution audit,PASS,"Report exists and identifies STR-003/XAUUSD H1, but commit is an early research commit."
+execution_audit,execution_audit,D:\MT5\openclaw\bb_strategy\output\reports\v0.1\execution_audit.md,40d68a4,execution audit -> attribution,WARN,Report exists but predates forward config and records framework_start_time as missing at that time.
+attribution,trade_attribution,D:\MT5\openclaw\bb_strategy\output\reports\v0.1\trade_attribution.md,06f7350,attribution -> optimization,PASS,Report supports LONG-ONLY transition; not a final freeze manifest.
+optimization,optimization_report,D:\MT5\openclaw\bb_strategy\output\reports\v0.1\optimization_report.md,de7338b,optimization -> frozen report,PASS,Report supports bp=50 bs=2.5 lb=100 rr=6 LONG-ONLY; commit points to attribution base.
+parameter_freeze,version.json,D:\MT5\openclaw\bb_strategy\version.json,676986e,version.json -> frozen tag,CHAIN_BREAK,"version.json was added in e594c33 but declares 676986e, a prior commit without version.json."
+frozen_report,frozen_report,D:\MT5\openclaw\bb_strategy\output\reports\v0.1\frozen_report.md,676986e,frozen report -> frozen tag,CHAIN_BREAK,Frozen report declares 676986e while tag v0.1-frozen dereferences to e594c33.
+frozen_tag,v0.1-frozen,<git tag>,e594c33343268af948603ae1abb8e07592641b05,frozen tag -> forward branch,PASS,Annotated tag exists and dereferences to e594c33.
+forward_branch,forward-v0.1,<git branch>,e594c33343268af948603ae1abb8e07592641b05,forward branch -> forward config,PASS,forward-v0.1 exists and points exactly to frozen tag commit.
+forward_activation,forward_live_config.yaml,D:\MT5\openclaw\bb_strategy\forward_live\forward_live_config.yaml,676986e,forward config -> current state,WARN,Forward config exists but repeats stale 676986e commit; framework start time is present.
+current_state,working tree,D:\MT5\openclaw\bb_strategy,43e8b8e0dd2aece8f73e50fa76ef4e2ca022f645,current state,WARN,Current checkout is master at a post-freeze commit with untracked files; not canonical forward state.

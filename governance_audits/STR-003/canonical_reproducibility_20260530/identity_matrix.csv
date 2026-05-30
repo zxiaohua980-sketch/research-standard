@@ -1,0 +1,21 @@
+﻿field,source,declared_value,observed_or_canonical_value,status,note
+strategy_id,strategy_registry.yaml,STR-003,STR-003,CONSISTENT,Registry contains STR-003 record.
+strategy_id,strategy_identity.yaml,STR-003,STR-003,CONSISTENT,Central identity contains STR-003 record.
+strategy_id,version.json,STR-003,STR-003,CONSISTENT,Version manifest agrees on strategy id.
+strategy_id,forward_live_config.yaml,STR-003,STR-003,CONSISTENT,Forward config agrees on strategy id.
+canonical_name,strategy_registry.yaml,Bollinger Band Breakout LONG-ONLY on XAUUSD H1,Bollinger Band Breakout LONG-ONLY on XAUUSD H1,CONSISTENT,Names should match canonical identity.
+active_root_path,strategy_registry.yaml,D:\MT5\openclaw\bb_strategy,D:\MT5\openclaw\bb_strategy,CONSISTENT,Root path points to strategy directory.
+active_root_path,strategy_identity.yaml,D:\MT5\openclaw\bb_strategy,D:\MT5\openclaw\bb_strategy,CONSISTENT,Identity active root path matches observed root.
+git_repository,strategy_registry.yaml,D:\MT5\openclaw\bb_strategy\.git,D:\MT5\openclaw\bb_strategy\.git,CONSISTENT,Git repo exists locally.
+current_branch,git status,master,forward-v0.1,INCONSISTENT,Current checkout is not the registered forward branch.
+current_head,git rev-parse HEAD,43e8b8e0dd2aece8f73e50fa76ef4e2ca022f645,e594c33343268af948603ae1abb8e07592641b05,INCONSISTENT,"Current HEAD is post-freeze master, not frozen commit."
+frozen_tag,version/registry/frozen_candidate,v0.1-frozen / v0.1-frozen / v0.1-frozen,v0.1-frozen,CONSISTENT,Frozen tag names agree.
+frozen_commit,git tag dereference,e594c33343268af948603ae1abb8e07592641b05,e594c33343268af948603ae1abb8e07592641b05,CONSISTENT,Annotated tag v0.1-frozen dereferences to this commit.
+frozen_commit,strategy_registry.yaml,e594c33,e594c33,CONSISTENT,Registry short commit matches tag dereference.
+frozen_commit,frozen_candidates.yaml,e594c33,e594c33,CONSISTENT,Frozen candidate short commit matches tag dereference.
+frozen_commit,version.json,676986e,e594c33,INCONSISTENT,"version.json points to 676986e, not the freeze tag commit."
+frozen_commit,forward_live_config.yaml,676986e,e594c33,INCONSISTENT,Forward config repeats the version.json commit.
+forward_branch,strategy_registry.yaml,forward-v0.1,forward-v0.1,CONSISTENT,Registry declares forward branch.
+forward_branch,git rev-parse forward-v0.1,e594c33343268af948603ae1abb8e07592641b05,e594c33343268af948603ae1abb8e07592641b05,CONSISTENT,Forward branch exists and points exactly to frozen commit.
+governance_state,stage_states/STR-003.yaml,forward_live / active,forward_live / active,CONSISTENT,Stage state marks forward-live active.
+governance_state,strategy_registry.yaml,stage_12_forward_live / forward_live_active,stage_12_forward_live / forward_live_active,CONSISTENT,Registry marks stage 12 forward-live active.

@@ -1,0 +1,113 @@
+{
+  "script_name": "frozen_registry_check.py",
+  "script_version": "1.0.0",
+  "generated_at_utc": "2026-05-30T07:27:12Z",
+  "read_only": true,
+  "no_auto_fix": true,
+  "no_parameter_optimization": true,
+  "no_trading_advice": true,
+  "requested_action": "modify_parameters",
+  "strategy_id": "STR-003",
+  "candidate_id": "STR-003-v0.1-frozen",
+  "hypothesis_id": "HYP-STR003-BB-XAUUSD-H1-BREAKOUT",
+  "input_files": [
+    {
+      "role": "strategy_registry",
+      "path": "D:\\MT5\\research_registry\\strategy_registry.yaml",
+      "hash": "sha256:7e6ee394b588576d9dd786fa8b4202c471a40b989af97d0afc12c677c764d63a",
+      "row_count": 505
+    },
+    {
+      "role": "frozen_candidates",
+      "path": "D:\\MT5\\RESEARCH_STANDARD\\governance_pilots\\STR-003\\frozen_candidates.yaml",
+      "hash": "sha256:c35598d106cbc9b589001f7f40b7e89da2b51590b845795a1c9b65c41ce0d8c1",
+      "row_count": 53
+    },
+    {
+      "role": "archived_hypotheses",
+      "path": "D:\\MT5\\RESEARCH_STANDARD\\governance_pilots\\STR-003\\archived_hypotheses.yaml",
+      "hash": "sha256:86dd53544efb10adeea020033314e51787883554f4e4d4b2afc8b8965566a27e",
+      "row_count": 38
+    }
+  ],
+  "checks": [
+    {
+      "id": "strategy_registry_exists",
+      "status": "PASS",
+      "severity": "info",
+      "message": "strategy_registry exists: True.",
+      "count": 0
+    },
+    {
+      "id": "strategy_in_central_registry",
+      "status": "PASS",
+      "severity": "info",
+      "message": "strategy_id STR-003 in central registry: True.",
+      "count": 0
+    },
+    {
+      "id": "frozen_candidates_exists",
+      "status": "PASS",
+      "severity": "info",
+      "message": "frozen_candidates exists: True.",
+      "count": 0
+    },
+    {
+      "id": "frozen_candidate_found",
+      "status": "PASS",
+      "severity": "info",
+      "message": "Matching frozen candidate found.",
+      "count": 0
+    },
+    {
+      "id": "frozen_field:frozen_commit",
+      "status": "PASS",
+      "severity": "info",
+      "message": "Frozen field frozen_commit present.",
+      "count": 0
+    },
+    {
+      "id": "frozen_field:frozen_tag",
+      "status": "PASS",
+      "severity": "info",
+      "message": "Frozen field frozen_tag present.",
+      "count": 0
+    },
+    {
+      "id": "frozen_field:config_hash",
+      "status": "PASS",
+      "severity": "info",
+      "message": "Frozen field config_hash present.",
+      "count": 0
+    },
+    {
+      "id": "frozen_field:data_ledger_hash",
+      "status": "PASS",
+      "severity": "info",
+      "message": "Frozen field data_ledger_hash present.",
+      "count": 0
+    },
+    {
+      "id": "requested_action_blocked",
+      "status": "FAIL",
+      "severity": "blocking",
+      "message": "Requested action modify_parameters appears in blocked_actions.",
+      "count": 0
+    },
+    {
+      "id": "archived_hypotheses_exists",
+      "status": "PASS",
+      "severity": "info",
+      "message": "archived_hypotheses exists: True.",
+      "count": 0
+    },
+    {
+      "id": "hypothesis_not_archived",
+      "status": "PASS",
+      "severity": "info",
+      "message": "Hypothesis not found in archived registry.",
+      "count": 0
+    }
+  ],
+  "overall_status": "FAIL"
+}

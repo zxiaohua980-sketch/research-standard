@@ -1,0 +1,53 @@
+registry_version: "1.0"
+updated_at: "2026-05-30T15:15:00+08:00"
+frozen_candidates:
+  - candidate_id: "STR-003-v0.1-frozen"
+    strategy_id: "STR-003"
+    hypothesis_id: "HYP-STR003-BB-XAUUSD-H1-BREAKOUT"
+    version: "v0.1"
+    status: "forward_live"
+    frozen_tag: "v0.1-frozen"
+    frozen_commit: "e594c33"
+    frozen_tag_object: "1ab4d800f45c073862758582c124218d44467463"
+    version_json_reported_commit: "676986e"
+    config_hash: "sha256:72629a408893d8406d10fc64db934a8c70b722e8e6c800f7e176a481e57c6676"
+    data_ledger_hash: "sha256:b76a7f0c1ae966f68cd497dc791a18f985a0a32beaaadee10fa67af78b74cf78"
+    event_study_report: "D:\\MT5\\openclaw\\bb_strategy\\output\\reports\\v0.1\\event_study_report.md"
+    event_study_report_hash: "sha256:81a1684eb25558fb646ee41964c0bfe2488e40245c8086f8eaff519e50ffc5a6"
+    audit_report: "D:\\MT5\\openclaw\\bb_strategy\\output\\reports\\v0.1\\execution_audit.md"
+    audit_report_hash: "sha256:2a9bcd672d8a54274336fdaaf5536f94121b15b56d73edba767bf4198dc1ea5b"
+    attribution_report: "D:\\MT5\\openclaw\\bb_strategy\\output\\reports\\v0.1\\trade_attribution.md"
+    attribution_report_hash: "sha256:ec81815d23cf85a16b76fd029b91f2cf4639d72a1ce85d289f167c843b6ed43e"
+    frozen_report: "D:\\MT5\\openclaw\\bb_strategy\\output\\reports\\v0.1\\frozen_report.md"
+    frozen_report_hash: "sha256:0fcdaff13537e0c751f7d8cb8a4155c116bc2e2f6a05ef4f9402f9e7f5535cb7"
+    fixed_parameters:
+      symbol: "XAUUSD"
+      timeframe: "H1"
+      direction: "LONG_ONLY"
+      bp: 50
+      bs: 2.5
+      lb: 100
+      bw: 0.02
+      rr: 6
+      risk_per_trade: 100
+    execution_model:
+      signal_time_rule: "bar close confirmation"
+      entry_time_rule: "legacy reports mention close/first breach; reassessment metadata states next_bar_open"
+      fill_convention: "requires reconciliation; version/frozen reports and reassessment metadata differ"
+      cost_model: "spread=0.2, slippage=0.03 per side, commission=0.0"
+    allowed_evidence_after_freeze:
+      - "forward_live_collection"
+      - "gate_check"
+      - "integrity_check"
+      - "operational_intervention_log"
+    blocked_actions:
+      - "modify_parameters"
+      - "add_filter"
+      - "change_sl_tp"
+      - "change_sizing"
+      - "change_cost_model"
+      - "historical_backfill"
+      - "retune_from_early_losses"
+      - "merge_forward_to_frozen"
+    created_at: "2026-05-27T00:00:00Z"
+    notes: "Sidecar governance reconstruction. Registry/tag commit is e594c33 while version.json reports 676986e; this mismatch should be resolved before formal reproducibility claims."

@@ -1,0 +1,48 @@
+{
+  "generated_at": "2026-05-30T16:12:57+08:00",
+  "strategy_id": "STR-003",
+  "scope": "governance_audit_readonly_inputs_generated_outputs_only",
+  "strategy_directory_modified": false,
+  "registry_files_modified": false,
+  "backtest_or_optimization_run": false,
+  "final_label": "PARTIALLY_REPRODUCIBLE",
+  "output_dir": "D:\\MT5\\RESEARCH_STANDARD\\governance_audits\\STR-003\\canonical_reproducibility_20260530",
+  "outputs": {
+    "canonical_reproducibility_audit.md": {
+      "path": "D:\\MT5\\RESEARCH_STANDARD\\governance_audits\\STR-003\\canonical_reproducibility_20260530\\canonical_reproducibility_audit.md",
+      "sha256": "sha256:9f7507e7c95a4badb932e09d6ffe9f18aa03577621127ad63532a6ea8c39dec8",
+      "size_bytes": 9941,
+      "rows": 91
+    },
+    "chain_of_custody.csv": {
+      "path": "D:\\MT5\\RESEARCH_STANDARD\\governance_audits\\STR-003\\canonical_reproducibility_20260530\\chain_of_custody.csv",
+      "sha256": "sha256:c7063ce0826606fa608dca588b1a72610ead7dd91cb806d3b38918540734d7cc",
+      "size_bytes": 2235,
+      "rows": 11
+    },
+    "evidence_registry.csv": {
+      "path": "D:\\MT5\\RESEARCH_STANDARD\\governance_audits\\STR-003\\canonical_reproducibility_20260530\\evidence_registry.csv",
+      "sha256": "sha256:7b4ca71d32e787d2e72942adf45f2c1382ee40bcad350c1928a5fd4d4ff22239",
+      "size_bytes": 7481,
+      "rows": 22
+    },
+    "identity_matrix.csv": {
+      "path": "D:\\MT5\\RESEARCH_STANDARD\\governance_audits\\STR-003\\canonical_reproducibility_20260530\\identity_matrix.csv",
+      "sha256": "sha256:d759159d940526c90a1c9120c80cb4ae8ef239de8d1dcf5dbdb672f919172b81",
+      "size_bytes": 2810,
+      "rows": 21
+    },
+    "reproducibility_risks.csv": {
+      "path": "D:\\MT5\\RESEARCH_STANDARD\\governance_audits\\STR-003\\canonical_reproducibility_20260530\\reproducibility_risks.csv",
+      "sha256": "sha256:cb953109703eb94c28893ec0a6c6eb741315b644dc426f5eb63c755c96ab04ff",
+      "size_bytes": 1517,
+      "rows": 9
+    },
+    "_generate_audit.py": {
+      "path": "D:\\MT5\\RESEARCH_STANDARD\\governance_audits\\STR-003\\canonical_reproducibility_20260530\\_generate_audit.py",
+      "sha256": "sha256:507eab65f73e917df2b3659c2d0afa4d4cbcd62fdf99dc071d17e3b3f65f0e74",
+      "size_bytes": 30951,
+      "rows": 382
+    }
+  }
+}

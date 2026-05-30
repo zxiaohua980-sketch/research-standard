@@ -1,0 +1,25 @@
+state_version: "1.0"
+strategy_id: ""
+hypothesis_id: ""
+current_stage: "hypothesis"
+stage_status: "active"  # active | blocked | complete | archived
+allowed_actions:
+  - "write_hypothesis"
+blocked_actions:
+  - "parameter_search"
+  - "modify_frozen_strategy"
+required_inputs:
+  - "AGENTS.md"
+  - "strategy_registry.yaml"
+required_outputs:
+  - "hypothesis.md"
+next_gate:
+  name: "event_study_ready"
+  requirements:
+    - "hypothesis_is_written"
+    - "data_ledger_exists"
+decision_grade_allowed: false
+frozen_candidate_required: false
+ledger_required: true
+updated_at: ""
+notes: ""

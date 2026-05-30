@@ -1,0 +1,109 @@
+ledger_version: "1.0"
+strategy_id: "STR-003"
+hypothesis_id: "HYP-STR003-BB-XAUUSD-H1-BREAKOUT"
+created_at: "2026-05-30T15:15:00+08:00"
+updated_at: "2026-05-30T15:15:00+08:00"
+pilot_mode: true
+pilot_note: "Sidecar governance onboarding. It references real STR-003 files but does not modify D:\\MT5\\openclaw\\bb_strategy."
+datasets:
+  - dataset_id: "str003-v01-source-results"
+    symbols: ["XAUUSD"]
+    timeframe: "H1"
+    date_range: "2017-08-28/2026-05-15"
+    timezone: "unknown; reports refer to UTC for freeze timestamps"
+    source_path: "D:\\MT5\\openclaw\\bb_strategy\\results.csv"
+    data_hash: "sha256:46e31ad7e218dcb260a1f680cecb010d65e2603fd91a489cb407edc634b0fa50"
+    row_count: 28
+    evidence_role: "legacy_unverified"
+    usage_type: "reporting_only"
+    research_stage: "legacy_pre_ledger"
+    consumed: true
+    use_count: 1
+    first_used_at: "unknown"
+    last_used_at: "2026-05-27"
+    used_by: ["version.json", "frozen_report.md"]
+    notes: "Existing result artifact predates this machine-readable ledger; not clean final evidence by itself."
+  - dataset_id: "str003-v01-trade-summary"
+    symbols: ["XAUUSD"]
+    timeframe: "H1"
+    date_range: "2017-08-28/2026-05-15"
+    timezone: "unknown"
+    source_path: "D:\\MT5\\openclaw\\bb_strategy\\output\\reports\\v0.1\\trade_summary.csv"
+    data_hash: "sha256:b70e3e70747f9bce6bc1a6b8680af964f96b58ba887dbd4c7ca09784f7733d35"
+    row_count: 344
+    evidence_role: "legacy_unverified"
+    usage_type: "trade_attribution"
+    research_stage: "trade_attribution"
+    consumed: true
+    use_count: 1
+    first_used_at: "2026-05-27"
+    last_used_at: "2026-05-27"
+    used_by: ["trade_attribution.md", "frozen_report.md"]
+    notes: "Used for attribution and freeze report before this ledger existed."
+  - dataset_id: "str003-v01-locked-final-holdout"
+    symbols: ["XAUUSD"]
+    timeframe: "H1"
+    date_range: "2025-01-01/2026-05-15"
+    timezone: "unknown"
+    source_path: "D:\\MT5\\openclaw\\bb_strategy\\output\\reports\\v0.1\\frozen_report.md"
+    data_hash: "sha256:0fcdaff13537e0c751f7d8cb8a4155c116bc2e2f6a05ef4f9402f9e7f5535cb7"
+    row_count: 88
+    evidence_role: "locked_final_holdout"
+    usage_type: "locked_final_evaluation"
+    research_stage: "locked_final_evaluation"
+    consumed: true
+    use_count: 1
+    first_used_at: "2026-05-27"
+    last_used_at: "2026-05-27"
+    used_by: ["frozen_report.md", "version.json", "strategy_registry.yaml"]
+    notes: "Already opened and reported as Holdout +9060, 105 trades. Must not be reused for parameter or rule selection."
+  - dataset_id: "str003-forward-live-config"
+    symbols: ["XAUUSD"]
+    timeframe: "H1"
+    date_range: "from 2026-05-27 00:00:00 UTC"
+    timezone: "UTC framework_start_time; broker data timezone unspecified"
+    source_path: "D:\\MT5\\openclaw\\bb_strategy\\forward_live\\forward_live_config.yaml"
+    data_hash: "sha256:15e6f74d5b2aff6ca299e36258596397f8c9ab01872dbbb06ed38ed342e8f535"
+    row_count: 49
+    evidence_role: "forward_live"
+    usage_type: "forward_live_collection"
+    research_stage: "forward_live"
+    consumed: false
+    use_count: 0
+    first_used_at: null
+    last_used_at: null
+    used_by: []
+    notes: "Forward-live evidence only counts for signals/trades after framework_start_time."
+  - dataset_id: "str003-reassessment-20260527-stage01-execution"
+    symbols: ["XAUUSD"]
+    timeframe: "H1"
+    date_range: "2017-08-28/2026-05-15"
+    timezone: "unknown"
+    source_path: "D:\\MT5\\openclaw\\bb_strategy\\output\\reports\\reassessment_20260527\\stage_01_execution\\audited_trades.csv"
+    data_hash: "sha256:f42931675b81e662ae2c1bc0977f93c53d1607b891172503b71d8c61c3f490cf"
+    row_count: 69
+    evidence_role: "diagnostic_only"
+    usage_type: "execution_audit"
+    research_stage: "post_freeze_reassessment"
+    consumed: true
+    use_count: 1
+    first_used_at: "2026-05-27"
+    last_used_at: "2026-05-27"
+    used_by: ["reassessment_20260527/stage_01_execution"]
+    notes: "Post-freeze diagnostic/reassessment artifact. Not clean OOS and not permission to modify frozen v0.1."
+usage_events:
+  - event_id: "str003-freeze-v01"
+    timestamp: "2026-05-27T00:00:00Z"
+    actor: "legacy research process"
+    research_stage: "frozen"
+    action: "freeze_candidate"
+    datasets_read: ["str003-v01-source-results", "str003-v01-trade-summary", "str003-v01-locked-final-holdout"]
+    datasets_consumed: ["str003-v01-locked-final-holdout"]
+    output_files: ["version.json", "output\\reports\\v0.1\\frozen_report.md", "forward_live\\forward_live_config.yaml"]
+    decision: "conditionally approved for forward-live"
+    notes: "Ledger created after the event; historical reconstruction from existing reports."
+guard_state:
+  locked_final_holdout_opened: true
+  locked_final_holdout_opened_at: "2026-05-27T00:00:00Z"
+  locked_final_holdout_evaluated_version: "v0.1"
+  forward_framework_start_time: "2026-05-27T00:00:00Z"

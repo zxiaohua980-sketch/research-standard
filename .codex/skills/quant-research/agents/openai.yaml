@@ -1,0 +1,25 @@
+interface:
+  display_name: "Quant Research"
+  short_description: "Research governance framework for MT5 and FX quantitative workflows."
+  default_prompt: "Use quant-research to check the data ledger, frozen registry, and stage gate before structuring this MT5 FX research task."
+metadata:
+  version: "1.2.0"
+  purpose: "Constrain quantitative research quality with data ledger, frozen baseline, and stage gate governance; not to generate alpha, tune strategy parameters, or produce broker instructions."
+  applies_to:
+    - "MT5 OHLC and tick research"
+    - "FX event studies"
+    - "strategy backtest reviews"
+    - "market microstructure and liquidity sweep research"
+    - "walk-forward and OOS validation"
+    - "lookahead and survivorship audits"
+    - "strategy attribution and freeze management"
+    - "machine-readable data ledger guards"
+    - "frozen baseline registry checks"
+    - "research stage gate checks"
+    - "Chinese diagnostic research reports"
+  excludes:
+    - "automatic alpha discovery"
+    - "automatic parameter optimization"
+    - "broker order placement"
+    - "EA live trading code generation"
+    - "strategy recommendations without audit evidence"

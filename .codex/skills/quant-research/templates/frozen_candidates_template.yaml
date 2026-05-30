@@ -1,0 +1,34 @@
+registry_version: "1.0"
+updated_at: ""
+frozen_candidates:
+  - candidate_id: ""
+    strategy_id: ""
+    hypothesis_id: ""
+    version: ""
+    status: "candidate"  # candidate | frozen | oos_failed | forward_live | retired
+    frozen_tag: ""
+    frozen_commit: ""
+    config_hash: ""
+    data_ledger_hash: ""
+    event_study_report: ""
+    audit_report: ""
+    attribution_report: ""
+    fixed_parameters: {}
+    execution_model:
+      signal_time_rule: ""
+      entry_time_rule: ""
+      fill_convention: ""
+      cost_model: ""
+    allowed_evidence_after_freeze:
+      - "locked_final_evaluation"
+      - "forward_live_collection"
+      - "integrity_check"
+    blocked_actions:
+      - "modify_parameters"
+      - "add_filter"
+      - "change_sl_tp"
+      - "change_sizing"
+      - "change_cost_model"
+      - "historical_backfill"
+    created_at: ""
+    notes: ""

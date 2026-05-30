@@ -1,0 +1,38 @@
+registry_version: "1.0"
+updated_at: "2026-05-30T15:15:00+08:00"
+archived_hypotheses:
+  - hypothesis_id: "HYP-STR003-SHORT-BB-BREAKOUT"
+    strategy_id: "STR-003"
+    title: "Short-side BB breakout component"
+    status: "rejected"
+    rejection_reason: "Frozen report states SHORT signals were broken and LONG-ONLY was adopted."
+    evidence_files:
+      - "D:\\MT5\\openclaw\\bb_strategy\\output\\reports\\v0.1\\frozen_report.md"
+      - "D:\\MT5\\openclaw\\bb_strategy\\output\\reports\\v0.1\\trade_attribution.md"
+    data_used: ["str003-v01-trade-summary"]
+    archived_at: "2026-05-27T00:00:00Z"
+    may_revisit: false
+    revisit_conditions: []
+    prohibited_reuse:
+      - "retune_short_side_inside_v0.1"
+      - "reuse_v0.1_locked_final_holdout_for_short_revival"
+    notes: "Any revival must be a new hypothesis/version with new data plan."
+  - hypothesis_id: "HYP-STR003-HARD-SESSION-FILTER"
+    strategy_id: "STR-003"
+    title: "Hard session filter based on NY/London performance"
+    status: "weak"
+    rejection_reason: "Frozen report notes NY session best but no hard filter due to kill-rate/robustness concerns."
+    evidence_files:
+      - "D:\\MT5\\openclaw\\bb_strategy\\output\\reports\\v0.1\\regime_validation_report.md"
+      - "D:\\MT5\\openclaw\\bb_strategy\\output\\reports\\v0.1\\frozen_report.md"
+    data_used: ["str003-v01-trade-summary"]
+    archived_at: "2026-05-27T00:00:00Z"
+    may_revisit: true
+    revisit_conditions:
+      - "new version only"
+      - "fresh development validation or forward-live evidence"
+      - "explicit attribution before filter proposal"
+    prohibited_reuse:
+      - "retrofit_session_filter_to_v0.1_forward_live"
+      - "claim_v0.1_forward_as_filtered_strategy"
+    notes: "Monitor only; not part of frozen v0.1 rules."

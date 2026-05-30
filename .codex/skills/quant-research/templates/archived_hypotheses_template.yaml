@@ -1,0 +1,18 @@
+registry_version: "1.0"
+updated_at: ""
+archived_hypotheses:
+  - hypothesis_id: ""
+    strategy_id: ""
+    title: ""
+    status: "rejected"  # rejected | weak | audit_fail | superseded | abandoned
+    rejection_reason: ""
+    evidence_files: []
+    data_used: []
+    archived_at: ""
+    may_revisit: false
+    revisit_conditions: []
+    prohibited_reuse:
+      - "reuse_same_locked_final_holdout"
+      - "retune_same_parameters_without_new_hypothesis"
+      - "rename_failed_oos_as_dev_success"
+    notes: ""

@@ -1,0 +1,111 @@
+{
+  "script_name": "data_ledger_guard.py",
+  "script_version": "1.0.0",
+  "generated_at_utc": "2026-05-30T07:27:11Z",
+  "read_only": true,
+  "no_auto_fix": true,
+  "no_parameter_optimization": true,
+  "no_trading_advice": true,
+  "requested_action": "parameter_search",
+  "input_files": [
+    {
+      "path": "D:\\MT5\\RESEARCH_STANDARD\\governance_pilots\\STR-003\\research_data_ledger.yaml",
+      "hash": "sha256:b76a7f0c1ae966f68cd497dc791a18f985a0a32beaaadee10fa67af78b74cf78",
+      "row_count": 109
+    }
+  ],
+  "checks": [
+    {
+      "id": "ledger_exists",
+      "status": "PASS",
+      "severity": "info",
+      "message": "Ledger file exists.",
+      "count": 0
+    },
+    {
+      "id": "required_field:dataset_id",
+      "status": "PASS",
+      "severity": "info",
+      "message": "Required ledger field dataset_id present: True.",
+      "count": 0
+    },
+    {
+      "id": "required_field:evidence_role",
+      "status": "PASS",
+      "severity": "info",
+      "message": "Required ledger field evidence_role present: True.",
+      "count": 0
+    },
+    {
+      "id": "required_field:usage_type",
+      "status": "PASS",
+      "severity": "info",
+      "message": "Required ledger field usage_type present: True.",
+      "count": 0
+    },
+    {
+      "id": "required_field:research_stage",
+      "status": "PASS",
+      "severity": "info",
+      "message": "Required ledger field research_stage present: True.",
+      "count": 0
+    },
+    {
+      "id": "required_field:consumed",
+      "status": "PASS",
+      "severity": "info",
+      "message": "Required ledger field consumed present: True.",
+      "count": 0
+    },
+    {
+      "id": "required_field:use_count",
+      "status": "PASS",
+      "severity": "info",
+      "message": "Required ledger field use_count present: True.",
+      "count": 0
+    },
+    {
+      "id": "dataset_entries",
+      "status": "PASS",
+      "severity": "info",
+      "message": "Dataset entries found: 5.",
+      "count": 5
+    },
+    {
+      "id": "dataset_allowed:str003-v01-source-results",
+      "status": "PASS",
+      "severity": "info",
+      "message": "Dataset str003-v01-source-results role=legacy_unverified, consumed=True, use_count=1 allowed for read-only guard.",
+      "count": 0
+    },
+    {
+      "id": "dataset_allowed:str003-v01-trade-summary",
+      "status": "PASS",
+      "severity": "info",
+      "message": "Dataset str003-v01-trade-summary role=legacy_unverified, consumed=True, use_count=1 allowed for read-only guard.",
+      "count": 0
+    },
+    {
+      "id": "final_holdout_selection_use:str003-v01-locked-final-holdout",
+      "status": "FAIL",
+      "severity": "blocking",
+      "message": "locked_final_holdout cannot be used for selection action parameter_search.",
+      "count": 0
+    },
+    {
+      "id": "dataset_allowed:str003-forward-live-config",
+      "status": "PASS",
+      "severity": "info",
+      "message": "Dataset str003-forward-live-config role=forward_live, consumed=False, use_count=0 allowed for read-only guard.",
+      "count": 0
+    },
+    {
+      "id": "dataset_allowed:str003-reassessment-20260527-stage01-execution",
+      "status": "PASS",
+      "severity": "info",
+      "message": "Dataset str003-reassessment-20260527-stage01-execution role=diagnostic_only, consumed=True, use_count=1 allowed for read-only guard.",
+      "count": 0
+    }
+  ],
+  "overall_status": "FAIL"
+}

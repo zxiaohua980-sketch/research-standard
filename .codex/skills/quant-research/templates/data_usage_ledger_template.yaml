@@ -1,0 +1,50 @@
+strategy_id: ""
+protocol_version: ""
+created_at: ""
+updated_at: ""
+data_files:
+  - path: ""
+    hash: ""
+    row_count: null
+    symbols: []
+    timeframe: ""
+    timezone: ""
+    range: ""
+splits:
+  discovery_train:
+    range: ""
+    symbols: []
+    timeframe: ""
+    timezone: ""
+    hash: ""
+    status: "consumed_for_discovery"
+    use_count: 0
+  development_validation:
+    range: ""
+    symbols: []
+    timeframe: ""
+    timezone: ""
+    hash: ""
+    status: "locked_until_candidate_declared"
+    use_count: 0
+    consumed_by_decisions: []
+  locked_final_holdout:
+    range: ""
+    symbols: []
+    timeframe: ""
+    timezone: ""
+    hash: ""
+    status: "sealed"
+    use_count: 0
+    opened_at: null
+    evaluated_version: null
+  forward_live:
+    range: "from framework_start_time"
+    framework_start_time: null
+    status: "unavailable_before_freeze"
+    use_count: 0
+decisions:
+  - timestamp: ""
+    decision: ""
+    datasets_seen: []
+    resulting_status_change: ""

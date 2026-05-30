@@ -1,0 +1,53 @@
+●你现在有完整的策略开发工具集。根据你的情况，选择合适的入口：
+
+  如果是全新策略开发：
+  打开 START_TODAY.md，按 30 分钟 → 15 分钟 → 3 小时 → 晚上 → 周末的节奏走。每个阶段都有具体的代码模板、commit
+  命令和检查清单。
+
+  如果是半开发策略救援：
+  打开 MIDWAY_RESCUE.md，用 30 分钟自检清单快速定位你在哪个 Stage，然后选对应的 Method（A/B/C/D/E）走具体步骤。
+
+  如果想快速查参考：
+  - CHEATSHEET.md —— 十大禁区 + 七层检验 + 常见错误
+  - TEMPLATE_signal_engine.py —— 复制改你的信号逻辑
+
+  当前已建立的核心规范：
+  - 13 阶段研究流程（RESEARCH_WORKFLOW.md）
+  - 交易归因七层检验（TRADE_ATTRIBUTION_STANDARD.md）
+  - 参数优化三层分离（OPTIMIZATION_POLICY.md）
+  - 环境诊断五维度（REGIME_VALIDATION_STANDARD.md）
+  - 版本冻结和前向验证（VERSIONING_AND_FREEZE_POLICY.md）
+  - Git 可复现性规范（GIT_AND_REPRODUCIBILITY_STANDARD.md）
+
+  需要我帮你启动哪一个？或者有具体的开发问题？
+
+✻ Brewed for 2m 35s
+
+> 写提示词，我再另外一个code 窗口打开，自检定位                                                                         
+●Write(D:\MT5\RESEARCH_STANDARD\SELF_DIAGNOSIS_PROMPT.md)
+  ⎿  Wrote 209 lines to ..\..\RESEARCH_STANDARD\SELF_DIAGNOSIS_PROMPT.md
+       2 # 策略自检诊断提示词
+       3 在另一个 Claude Code 窗口中，粘贴以下提示词，然后回答问题。Claude 会自动定位你的策略当前所在阶段，推荐救
+         援方案。
+       4
+       5 ---
+       6
+       7 ## 粘贴以下内容到 Claude Code
+       8
+       9 ```
+      10 你是量化策略开发诊断专家。用户将告诉你他们的策略当前状态，你的任务是：
+     … +200 lines (ctrl+o to expand)
+
+●已创建 SELF_DIAGNOSIS_PROMPT.md，在新窗口中粘贴里面的内容，然后按格式填你的策略信息，Claude 会自动：
+
+  1. 逐项检查 — 对照 13 阶段清单
+  2. 快速定位 — 告诉你完成了哪些、遗漏了哪些
+  3. 推荐方案 — 给出 Method A/B/C/D/E 中的哪一个
+  4. 具体步骤 — 包括时间估算和代码模板
+  5. 一键提交 — 直接给出该阶段的 commit 命令
+
+  用 10 分钟填这份表，就能清楚地知道你的策略卡在哪里了。
+
+✻ Churned for 35s
+
+● How is Claude doing this session? (optional)

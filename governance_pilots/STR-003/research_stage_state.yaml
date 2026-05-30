@@ -1,0 +1,44 @@
+state_version: "1.0"
+strategy_id: "STR-003"
+hypothesis_id: "HYP-STR003-BB-XAUUSD-H1-BREAKOUT"
+current_stage: "forward_live"
+stage_status: "active"
+allowed_actions:
+  - "forward_live_collection"
+  - "append_new_signal"
+  - "append_new_trade"
+  - "gate_check"
+  - "integrity_check"
+  - "log_intervention"
+  - "read_only_governance_onboarding"
+blocked_actions:
+  - "historical_backfill"
+  - "modify_frozen_logic"
+  - "retune_from_early_losses"
+  - "merge_forward_to_frozen"
+  - "modify_parameters"
+  - "add_filter"
+  - "change_sl_tp"
+  - "change_sizing"
+  - "run_backtest"
+  - "parameter_search"
+required_inputs:
+  - "D:\\MT5\\RESEARCH_STANDARD\\AGENTS.md"
+  - "D:\\MT5\\research_registry\\strategy_registry.yaml"
+  - "D:\\MT5\\openclaw\\bb_strategy\\version.json"
+  - "D:\\MT5\\openclaw\\bb_strategy\\forward_live\\forward_live_config.yaml"
+required_outputs:
+  - "append-only forward_live_signals.csv when new forward signal exists"
+  - "append-only forward_live_trades.csv when new forward trade exists"
+  - "gate report only after Gate A or Gate B"
+next_gate:
+  name: "Gate A"
+  requirements:
+    - "framework_start_time + 3 calendar months"
+    - "at least 30 forward-live trades"
+    - "all records after 2026-05-27T00:00:00Z"
+decision_grade_allowed: false
+frozen_candidate_required: true
+ledger_required: true
+updated_at: "2026-05-30T15:15:00+08:00"
+notes: "Governance onboarding only. Current checked-out branch is master with untracked files; formal forward-live work should use forward-v0.1 from v0.1-frozen."

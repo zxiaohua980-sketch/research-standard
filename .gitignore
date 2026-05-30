@@ -1,0 +1,16 @@
+# Python/cache noise
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+
+# Local editor/OS noise
+.DS_Store
+Thumbs.db
+*.tmp
+*.log
+
+# Local virtual environments
+.venv/
+venv/
+env/

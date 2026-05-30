@@ -1,0 +1,51 @@
+{
+  "script_name": "stage_gate_check.py",
+  "script_version": "1.0.0",
+  "generated_at_utc": "2026-05-30T07:26:26Z",
+  "read_only": true,
+  "no_auto_fix": true,
+  "no_parameter_optimization": true,
+  "no_trading_advice": true,
+  "requested_action": "forward_live_collection",
+  "current_stage": "forward_live",
+  "gate_decision": "ALLOW",
+  "next_gate": "gate_a_or_b",
+  "input_files": [
+    {
+      "path": "D:\\MT5\\RESEARCH_STANDARD\\governance_pilots\\STR-003\\research_stage_state.yaml",
+      "hash": "sha256:4ee33e30246731ed829ff3f707afeda7c6394798305e8b7edb022f9596097ebd",
+      "row_count": 44
+    }
+  ],
+  "checks": [
+    {
+      "id": "state_exists",
+      "status": "PASS",
+      "severity": "info",
+      "message": "Stage state file exists.",
+      "count": 0
+    },
+    {
+      "id": "current_stage_present",
+      "status": "PASS",
+      "severity": "info",
+      "message": "current_stage=forward_live.",
+      "count": 0
+    },
+    {
+      "id": "known_stage",
+      "status": "PASS",
+      "severity": "info",
+      "message": "Known stage forward_live.",
+      "count": 0
+    },
+    {
+      "id": "action_gate",
+      "status": "PASS",
+      "severity": "info",
+      "message": "Action forward_live_collection is allowed at stage forward_live.",
+      "count": 0
+    }
+  ],
+  "overall_status": "PASS"
+}

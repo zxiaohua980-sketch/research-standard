@@ -1,0 +1,9 @@
+﻿risk_id,severity,finding,impact
+RISK_BRANCH_MISMATCH,HIGH,Current checkout is master while registry forward branch is forward-v0.1.,Blocks fully reproducible forward-live identity from current working tree.
+RISK_COMMIT_MISMATCH,HIGH,"Git tag/registry/frozen branch point to e594c33, but version.json/forward config declare 676986e.",Blocks fully reproducible freeze manifest until reconciled.
+RISK_UNTRACKED_FILES,MEDIUM,1.txt; analysis/paper_forward_observation_runner.py; analysis/reassessment_pipeline.py; output/reports/reassessment_20260527/,Dirty worktree blocks formal validation from current checkout.
+RISK_POST_FREEZE_MASTER_ADDITIONS,MEDIUM,Master contains post-freeze analysis/report additions after e594c33.,"Not invalid by itself, but not canonical forward lineage."
+RISK_RECONSTRUCTED_LEDGER,MEDIUM,Data ledger was created after freeze from existing artifacts.,Historical split integrity cannot be upgraded by file existence alone.
+RISK_EXECUTION_MODEL_WORDING,MEDIUM,Legacy reports/config differ on close/first breach/next_bar_open wording.,Requires separate Stage 2 execution audit if strategy-level trust is needed.
+RISK_MULTIPLE_WORKTREES,LOW,worktree D:/MT5/openclaw/bb_strategy | HEAD 43e8b8e0dd2aece8f73e50fa76ef4e2ca022f645 | branch refs/heads/master,Only one worktree observed.
+RISK_CORE_FILE_DRIFT,LOW,No diff for selected core freeze files between e594c33 and current HEAD.,"Core freeze files appear unchanged on master, but current branch is still not canonical forward branch."

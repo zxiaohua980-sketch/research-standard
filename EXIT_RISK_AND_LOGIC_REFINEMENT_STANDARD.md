@@ -108,7 +108,46 @@ Any failed item means the reported metrics are not decision-grade.
 
 ---
 
-## 4. Stage 5 Attribution for Stops and Targets
+## 4. Phase 2 Bar-by-Bar Replay Gate
+
+Before a candidate strategy can be frozen or handed to runtime packaging, it must pass a
+bar-by-bar replay check. A vectorized or batch backtest is not enough to prove that the
+strategy can run like a live monitor.
+
+The replay engine must simulate:
+
+1. signal confirmation only after the completed decision bar;
+2. execution only on the next allowed executable quote or bar;
+3. position state updates one bar/event at a time;
+4. SL/TP, gap and same-bar collision ordering according to the frozen config;
+5. breakeven, trailing, timeout and partial exits using only information available at that
+   decision time;
+6. one completed signal bar triggering at most one open;
+7. state recovery assumptions after restart;
+8. the same cost, bid/ask and sizing model used by the candidate config.
+
+The replay report must include three diffs:
+
+| Diff | Required comparison |
+|------|---------------------|
+| Signal diff | batch backtest signals vs replay signals |
+| Trade diff | batch backtest trades vs replay trades |
+| Equity diff | batch backtest equity/PnL vs replay equity/PnL |
+
+Passing criteria:
+
+- signal count and trade count match, or every difference is explained;
+- entry and exit times are reproducible under the declared timing model;
+- PnL differences stay within the declared spread/slippage/gap model;
+- no lookahead, same-bar ideal fill, duplicate open, illegal SL/TP direction or state drift;
+- output `bar_by_bar_replay_report.md` before freeze.
+
+If this gate fails, the candidate returns to Phase 2 iteration. It cannot enter EXE dry-run or
+demo packaging as a frozen candidate.
+
+---
+
+## 5. Stage 5 Attribution for Stops and Targets
 
 The purpose of attribution is not to tune exits while looking at losses. It is to identify a
 specific, pre-declared hypothesis that can be replayed on development validation and finally
@@ -174,7 +213,7 @@ Use data layers consistently:
 
 ---
 
-## 5. Stage 6 Logic Refinement Gate
+## 6. Stage 6 Logic Refinement Gate
 
 Any proposed change must have a change record before code is modified:
 
@@ -221,7 +260,7 @@ Any proposed change must have a change record before code is modified:
 
 ---
 
-## 6. Freeze, Forward-Live and Live Safety
+## 7. Freeze, Forward-Live and Live Safety
 
 At Stage 11, freeze all of the following with hashes and version identifiers:
 
@@ -256,6 +295,7 @@ Before Stage 13 live deployment, document at minimum:
 | Stage 5 | `trade_attribution_report.md` with exit cohorts |
 | Stage 6 | `logic_change_proposal.md` and `logic_refinement.md` |
 | Stage 7 | full candidate/parameter output with dataset ledger |
+| Phase 2 freeze gate | `bar_by_bar_replay_report.md` with signal/trade/equity diffs |
 | Stage 11 | frozen risk/execution manifest in `version.json` or linked manifest |
 | Stage 12 | append-only signal/trade/intervention logs and integrity check |
 | Stage 13 | live risk and operations runbook |

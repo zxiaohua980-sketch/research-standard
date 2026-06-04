@@ -1,121 +1,175 @@
 ---
 name: quant-research
-description: Research governance operating system for MT5 and FX quantitative research. Use when Codex works on foreign-exchange quant tasks involving OHLC/tick data, event studies, backtests, market microstructure, liquidity sweeps, walk-forward, OOS validation, lookahead audits, survivorship checks, data ledger guards, frozen baseline registries, research stage gates, parameter freeze management, strategy attribution, or Chinese diagnostic reports.
+description: Three-phase research operating system for MT5 and FX quantitative strategy work. Use when Codex works on exploratory alpha hypothesis testing, OHLC/tick backtests, win-rate/RR testing, MFE/MAE attribution, strategy version iteration, bar-by-bar replay, OOS/holdout governance, forward-live boundaries, or preparing a frozen candidate for MT5 dry-run/demo runtime packaging.
 ---
 
 # Quant Research
 
-## Overview
+## Purpose
 
-Use this skill as a research operating system, not as an alpha generator. The goal is to turn a market hypothesis into reproducible evidence and decide whether the hypothesis should continue, be weakened, or be archived.
+Use this skill to move trading ideas through a phase-aware research pipeline:
 
-This skill must not develop trading strategies by itself, run hidden optimization, produce broker instructions, or convert market narratives into alpha claims. It coordinates workflow, references, templates, read-only audit scripts, and v1.2 governance gates.
+1. **Phase 1 - Quick exploration**: turn hypotheses into code, fatal-audit the obvious traps, run quick tests, RR tests, and multi-dimensional attribution. Results are exploratory only.
+2. **Phase 2 - Candidate iteration**: register promising ideas, version them, audit execution, compare versions, perform attribution-driven changes, and require bar-by-bar replay before freeze.
+3. **Phase 3 - EXE/demo runtime handoff**: hand a frozen candidate to MT5 runtime packaging with dry-run/demo safety gates. REAL trading is out of scope.
+
+This skill may help propose, quantify, implement, test, reject, and iterate exploratory strategy hypotheses. It must not present unverified exploration as alpha, OOS, forward-live, or live-ready evidence.
 
 ## Authority Boundary
 
-Before any strategy or research work, find and read the nearest project `AGENTS.md`. In this repository, `AGENTS.md` is the project-level highest rule. This skill must not copy or weaken those hard rules; it only operationalizes them by selecting workflow steps, references, templates, and read-only checks.
+First read the nearest project `AGENTS.md`. If available, also read the strategy registry.
 
-If `AGENTS.md` and this skill conflict, obey `AGENTS.md`. If a project has a central strategy registry, query it before changing or evaluating a strategy. If a strategy is unregistered, treat formal research as blocked until registration exists.
+- If `AGENTS.md` conflicts with this skill, obey `AGENTS.md`.
+- If a strategy is unregistered, Phase 1 exploration can continue with `templates/idea_card_template.md`, but formal Phase 2+ research is blocked until a minimal registry record exists.
+- Do not touch frozen or forward-live strategy code in place.
+- Do not place REAL orders, enable REAL-account trading, or treat demo/runtime logs as OOS-Final evidence.
 
-## Main Workflow
+## Phase Classifier
 
-For every applicable task:
+Before acting, classify the task:
 
-1. Read project `AGENTS.md` and the strategy registry.
-2. Identify the task type and research Stage 0-13.
-3. Check Git state, machine-readable data ledger state, frozen baseline registry state, research stage gate state, and forward-live contamination risk.
-4. Require a written hypothesis before any backtest or parameter search.
-5. Run event study before strategy-level performance evaluation when the task concerns a market pattern or event.
-6. Require execution audit before trusting any backtest metric.
-7. Require attribution before modifying filters, SL, TP, trailing, timeout, sizing, entry timing, or cost assumptions.
-8. Separate IS, OOS-Dev, locked_final_holdout, and forward-live; never use the same data both to choose and to prove.
-9. Run the relevant read-only audit scripts when input artifacts exist.
-10. Use templates for reports and mark whether the conclusion is decision-grade.
-11. Accept `REJECT`, `WEAK`, `AUDIT_FAIL`, or `NOT_DECISION_GRADE` as valid final outcomes.
+| Phase | Use when | Registry | Evidence label |
+|------|----------|----------|----------------|
+| Phase 1 exploration | new hypothesis, quick code, quick backtest, RR test, MFE/MAE, loss attribution | optional | `exploratory_not_decision_grade` |
+| Phase 2 candidate iteration | promising idea, versioned strategy, formal audit, logic change, parameter/RR platform, bar-by-bar replay | required | `candidate_not_final` until freeze/holdout |
+| Phase 3 runtime packaging | frozen candidate, EXE, dry-run/demo scan/order simulation, runtime safety | required | `runtime_validation_not_oos_final` |
+
+If the phase is unclear, choose the lowest-risk phase and state the assumption.
+
+## Phase 1 Workflow
+
+Goal: find whether a profit mechanism may exist.
+
+1. Create or update `idea_card.md` using `templates/idea_card_template.md`.
+2. Quantify the hypothesis: market, symbol, timeframe, target win rate, target RR, expected trade count, entry, SL, TP, invalidation.
+3. Implement the smallest testable code when asked; keep it separate from frozen/live code.
+4. Run a fatal audit before trusting even exploratory output:
+   - no future data or same-bar ideal fill;
+   - bar-close signals execute no earlier than next executable quote/bar;
+   - SL/TP direction is legal;
+   - same-bar SL/TP collision has a declared policy;
+   - costs are included or conservatively estimated;
+   - no duplicate/conflict positions or sample-end distortion.
+5. Run quick tests and use `templates/quick_test_report_template.md`.
+6. Always include RR testing when exits are part of the idea: 0.5R, 1R, 1.5R, 2R, 3R, 4R, 6R.
+7. Attribute winners and losers by structure, session, volatility, trend regime, entry quality, exit failure, cost, concentration, year/month, symbol and timeframe.
+8. Decide only: `keep_exploring`, `reject`, or `promote_to_candidate`.
+
+Phase 1 must not use locked final holdout and must not claim OOS, forward-live, or decision-grade validity.
+
+## Phase 2 Workflow
+
+Goal: turn a promising idea into an auditable candidate.
+
+1. Require minimal registry and `version.json`.
+2. Record Git state before formal runs.
+3. Freeze the candidate's current rules for a baseline.
+4. Run full execution audit before using metrics for decisions.
+5. Produce baseline results, RR platform analysis, and attribution.
+6. For any logic/risk/exit/sizing/cost change, write a bounded change proposal and create a new version or experiment branch.
+7. Re-audit after changes and compare parent vs child versions.
+8. Maintain data split discipline: discovery/development data can guide iteration; locked final holdout is opened once only after rules are fixed.
+9. Before freeze or runtime handoff, run bar-by-bar replay using `templates/bar_by_bar_replay_report_template.md`.
+10. Decide only: `continue_iteration`, `return_to_exploration`, `reject`, or `freeze_candidate`.
+
+Bar-by-bar replay is mandatory before Phase 3. It must compare batch vs replay signals, trades and equity, and explain every material difference.
+
+## Phase 3 Workflow
+
+Goal: package and verify a frozen candidate as a safe dry-run/demo runtime.
+
+1. Require frozen candidate identity: strategy id, version, commit, config hash, and bar-by-bar replay report.
+2. Create runtime handoff using `templates/runtime_handoff_template.md`.
+3. Use the `mt5-runtime-packager` skill for EXE packaging, MT5 path portability, dry-run/demo safety gates, order-intent journaling, signal execution ledger, startup reconciliation and portable deliverables.
+4. Default to dry-run. Demo order execution requires explicit user authorization and must remain DEMO-only with REAL hard rejection.
+5. Record EXE hash, config hash, build command, runtime audit, safety state and smoke-test result.
+6. Decide only: `runtime_blocked`, `dry_run_ready`, `demo_ready`, or `portable_package_ready`.
+
+Phase 3 validates runtime behavior, not strategy profitability. Demo/runtime logs are not OOS-Final.
 
 ## Governance Gates
 
-Apply these guards before ordinary audit scripts whenever the required state files exist:
+Apply gates by phase:
 
-1. **Data Ledger Guard**: use `references/data-ledger-standard.md`, `templates/research_data_ledger.yaml`, and `scripts/data_ledger_guard.py` to prevent consumed OOS, reused holdout, or untracked datasets from being treated as decision-grade.
-2. **Frozen Baseline Registry**: use `references/frozen-baseline-registry-standard.md`, `templates/frozen_candidates_template.yaml`, `templates/archived_hypotheses_template.yaml`, and `scripts/frozen_registry_check.py` to verify frozen candidates, archived hypotheses, and blocked actions.
-3. **Research Stage Gate**: use `references/research-stage-gate-standard.md`, `templates/research_stage_state.yaml`, and `scripts/stage_gate_check.py` to decide whether the requested action is allowed at the current stage.
+- Phase 1: fatal audit and evidence label are mandatory; full registry/data ledger is not mandatory.
+- Phase 2: registry, Git/version identity, execution audit, attribution, data split discipline and bar-by-bar replay are mandatory.
+- Phase 3: frozen candidate handoff, runtime safety gates, REAL rejection and portable package audit are mandatory.
 
-If a guard blocks the action, stop formal research and produce a failure or guard report. Do not continue by calling the run "temporary" unless the user explicitly requests exploratory work and accepts that it is not decision-grade.
+If a guard blocks formal research, do not stop all work automatically. Either downgrade to Phase 1 exploration with explicit labels or ask for the missing formal artifact when the user wants decision-grade output.
 
-## Task Classifier
+## References
 
-- New research idea: create or request `hypothesis.md`, event-study plan, data contract, and ledger entry.
-- Event study: load `references/event-study-standard.md` and use `templates/event_study_template.md`.
-- Backtest review: load `references/backtest-interpretation-standard.md`, run timing/integrity checks, and use `templates/strategy_report_template.md`.
-- Execution audit: load `references/lookahead-bias-standard.md`, `references/session-timezone-standard.md`, and use `templates/audit_report_template.md`.
-- Filter, exit, SL, TP, trailing, sizing, or entry timing change: load `references/strategy-attribution-standard.md` and require `templates/logic_change_proposal_template.md`.
-- Microstructure or liquidity sweep research: load `references/microstructure-liquidity-standard.md` and event-study standard.
-- Survivorship, missing trades, failed orders, or universe issues: load `references/survivorship-bias-standard.md`.
-- Failed or weak evidence: use `templates/failure_report_template.md`.
-- Data contamination or data-use uncertainty: load `references/data-ledger-standard.md` and run `scripts/data_ledger_guard.py`.
-- Frozen, OOS, forward-live, or archived-hypothesis questions: load `references/frozen-baseline-registry-standard.md` and run `scripts/frozen_registry_check.py` when registry files exist.
-- Any action whose stage permissions are unclear: load `references/research-stage-gate-standard.md` and run `scripts/stage_gate_check.py`.
+Load only what is needed:
 
-## Required References
-
-- `references/data-contracts.md`: required fields for signals, trades, event studies, summaries, and audit output.
-- `references/lookahead-bias-standard.md`: future-function and timing audit rules.
-- `references/survivorship-bias-standard.md`: missing trade, failed order, truncation, and abnormal data checks.
-- `references/backtest-interpretation-standard.md`: how to interpret metrics without overstating evidence.
-- `references/strategy-attribution-standard.md`: attribution before rule changes.
-- `references/event-study-standard.md`: event-study-first research design.
-- `references/microstructure-liquidity-standard.md`: London/NY, liquidity sweep, failed breakout, volatility, and cross-symbol rules.
-- `references/session-timezone-standard.md`: UTC, broker time, local time, DST, rollover, and cross-day session handling.
-- `references/data-ledger-standard.md`: machine-readable dataset usage and contamination guard.
-- `references/frozen-baseline-registry-standard.md`: frozen candidates and archived hypotheses governance.
-- `references/research-stage-gate-standard.md`: allowed and blocked actions by research stage.
+- `THREE_PHASE_RESEARCH_PIPELINE.md`: primary phase model.
+- `RESEARCH_WORKFLOW.md`: formal Stage 0-13 details for Phase 2+.
+- `DATA_SPLIT_AND_OOS_POLICY.md`: OOS, holdout and data-consumption rules.
+- `EXIT_RISK_AND_LOGIC_REFINEMENT_STANDARD.md`: execution, SL/TP, sizing, logic changes and bar-by-bar replay.
+- `references/lookahead-bias-standard.md`: timing and future-data audit.
+- `references/strategy-attribution-standard.md`: attribution before formal rule changes.
+- `references/backtest-interpretation-standard.md`: interpreting metrics without overclaiming.
+- `references/data-ledger-standard.md`: machine-readable data use guard.
+- `references/frozen-baseline-registry-standard.md`: frozen candidates and archived hypotheses.
+- `references/research-stage-gate-standard.md`: formal stage permissions.
 
 ## Templates
 
 Use:
 
-- `templates/strategy_report_template.md` for full strategy reports.
-- `templates/event_study_template.md` for pure event-study reports.
-- `templates/audit_report_template.md` for read-only audit reports.
-- `templates/data_usage_ledger_template.yaml` when a strategy lacks a data usage ledger.
-- `templates/logic_change_proposal_template.md` before any strategy rule change.
-- `templates/failure_report_template.md` for rejected, weak, or unauditable results.
-- `templates/research_data_ledger.yaml` for machine-readable dataset consumption tracking.
-- `templates/frozen_candidates_template.yaml` for frozen baseline candidates.
-- `templates/archived_hypotheses_template.yaml` for rejected or superseded hypotheses.
-- `templates/research_stage_state.yaml` for current stage, allowed actions, blocked actions, and next gate.
-
-Templates define mandatory fields. Do not omit required fields silently; write `missing`, `not available`, or `not decision-grade` explicitly.
+- `templates/idea_card_template.md` for Phase 1 ideas.
+- `templates/quick_test_report_template.md` for Phase 1 quick tests and RR matrix.
+- `templates/audit_report_template.md` for execution audits.
+- `templates/logic_change_proposal_template.md` before formal Phase 2 rule changes.
+- `templates/strategy_report_template.md` for candidate reports.
+- `templates/bar_by_bar_replay_report_template.md` before freezing a candidate.
+- `templates/runtime_handoff_template.md` before EXE/demo packaging.
+- `templates/research_data_ledger.yaml`, `templates/frozen_candidates_template.yaml`, and `templates/research_stage_state.yaml` for formal governance.
 
 ## Read-Only Scripts
 
-Scripts are first-pass audit helpers. They do not repair files, tune parameters, or generate trading advice. Prefer running them on copied or generated artifacts and treat their output as diagnostic evidence, not as proof that the strategy is valid.
+Scripts are diagnostic helpers, not proof of validity:
 
-- `scripts/signal_timing_check.py`: signal/entry ordering and bar index checks.
-- `scripts/session_timezone_check.py`: session, timezone, boundary, rollover, and cross-day checks.
-- `scripts/lookahead_audit.py`: suspicious column names and same-bar timing risk.
-- `scripts/trade_consistency_check.py`: SL/TP direction, duplicate IDs, costs, open trades, exit reasons.
-- `scripts/data_split_ledger_check.py`: ledger presence, final holdout openings, and split status.
-- `scripts/output_integrity_check.py`: non-empty reports/CSVs, hashes, row counts, timestamps.
-- `scripts/report_required_fields_check.py`: mandatory report sections.
-- `scripts/data_ledger_guard.py`: data consumption and holdout reuse guard.
-- `scripts/frozen_registry_check.py`: frozen candidate and archived hypothesis guard.
-- `scripts/stage_gate_check.py`: current-stage allowed/blocked action guard.
+- `scripts/signal_timing_check.py`
+- `scripts/session_timezone_check.py`
+- `scripts/lookahead_audit.py`
+- `scripts/trade_consistency_check.py`
+- `scripts/data_split_ledger_check.py`
+- `scripts/output_integrity_check.py`
+- `scripts/report_required_fields_check.py`
+- `scripts/data_ledger_guard.py`
+- `scripts/frozen_registry_check.py`
+- `scripts/stage_gate_check.py`
 
 ## Output Contract
 
-Every final research response must state:
+Keep output phase-appropriate.
 
-- task type and stage;
-- registry and AGENTS status;
-- data ledger guard status;
-- frozen registry guard status when applicable;
-- stage gate decision;
-- data evidence type used;
+Phase 1:
+
+- phase and evidence label;
+- hypothesis tested;
+- fatal audit status;
+- key metrics/RR matrix summary;
+- winner/loss attribution;
+- decision and next iteration.
+
+Phase 2:
+
+- registry/version/Git status;
 - audit status;
-- whether code or parameters may be changed;
-- whether the result is decision-grade;
-- allowed next action.
+- data evidence type;
+- attribution/change rationale;
+- bar-by-bar replay status when near freeze;
+- whether code/parameters may change;
+- decision and next action.
 
-Never present weak evidence as alpha. If evidence fails, report why it failed and stop at the correct stage.
+Phase 3:
+
+- frozen candidate identity;
+- runtime handoff status;
+- dry-run/demo safety status;
+- REAL rejection status;
+- EXE/config hash status;
+- runtime decision.
+
+Never present weak or exploratory evidence as alpha. If evidence fails, say whether to reject, iterate, downgrade to exploration, or block formal promotion.

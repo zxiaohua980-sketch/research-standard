@@ -4,6 +4,14 @@
 
 量化研究不是"跑回测"，而是从假说出发，经历假说验证、审计、事件研究、固定规则回测、赢亏归因、逻辑优化、样本外验证、环境与时间验证、冻结版本、最后前向验证的完整闭环。任何跳过的阶段都会留下过拟合或执行偏差的隐患。每个阶段都是必经的，每个阶段都必须有明确的产出和通过标准。
 
+本 Stage 0-13 流程属于正式研究验证细则，应放在 `THREE_PHASE_RESEARCH_PIPELINE.md` 的三阶段主流程下使用：
+
+- **Phase 1 快速开发测试**：可以用 `idea_card.md` 做探索性快测、盈亏比测试和多维归因，不要求完整 Stage 0-13，但结果必须标记为 `exploratory_not_decision_grade`。
+- **Phase 2 成型后版本迭代**：从最小注册开始，逐步执行本文件的 Stage 0-11 相关要求，并在冻结前增加逐根回测关口。
+- **Phase 3 EXE 模拟下单**：对应冻结候选后的 runtime 打包、dry-run/demo 验证和运行安全审计，不得把 demo/runtime 日志当作 OOS-Final。
+
+因此，"每个阶段都是必经"指的是正式候选进入决策级验证以后；它不应阻止 Phase 1 对未成型想法做快速探索。
+
 贯穿所有阶段的两项横向政策：
 
 - `DATA_SPLIT_AND_OOS_POLICY.md`：定义 IS、OOS-Dev、OOS-Final、WF-OOS、Forward-Live 与数据消费台账。

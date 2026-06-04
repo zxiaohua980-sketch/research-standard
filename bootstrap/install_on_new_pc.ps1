@@ -1,5 +1,6 @@
 param(
     [string]$MT5Root = "D:\MT5",
+    [string]$RegistryRoot = "",
     [switch]$ForceRootAgents,
     [switch]$SkipSkillInstall
 )
@@ -7,13 +8,21 @@ param(
 $ErrorActionPreference = "Stop"
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$RepoRoot = Split-Path -Parent $ScriptDir
+$RepoRoot = [System.IO.Path]::GetFullPath((Split-Path -Parent $ScriptDir))
+$MT5Root = [System.IO.Path]::GetFullPath($MT5Root)
+
+if ([string]::IsNullOrWhiteSpace($RegistryRoot)) {
+    $RegistryRoot = Join-Path $MT5Root "research_registry"
+}
+else {
+    $RegistryRoot = [System.IO.Path]::GetFullPath($RegistryRoot)
+}
 
 $RootAgentsSource = Join-Path $ScriptDir "MT5_ROOT_AGENTS.md"
 $RootAgentsTarget = Join-Path $MT5Root "AGENTS.md"
 $SkillSource = Join-Path $RepoRoot ".codex\skills\quant-research"
 $SkillTarget = Join-Path $env:USERPROFILE ".codex\skills\quant-research"
-$RegistryFile = Join-Path $MT5Root "research_registry\strategy_registry.yaml"
+$RegistryFile = Join-Path $RegistryRoot "strategy_registry.yaml"
 
 function Write-Step {
     param([string]$Message)
@@ -22,6 +31,7 @@ function Write-Step {
 
 Write-Step "Repository root: $RepoRoot"
 Write-Step "MT5 root: $MT5Root"
+Write-Step "Registry root: $RegistryRoot"
 
 if (-not (Test-Path -LiteralPath $MT5Root)) {
     Write-Step "Creating MT5 root directory."
@@ -32,20 +42,26 @@ if (-not (Test-Path -LiteralPath $RootAgentsSource)) {
     throw "Missing root AGENTS template: $RootAgentsSource"
 }
 
+$RootAgentsContent = Get-Content -LiteralPath $RootAgentsSource -Raw
+$RootAgentsContent = $RootAgentsContent.Replace("{{MT5_ROOT}}", $MT5Root)
+$RootAgentsContent = $RootAgentsContent.Replace("{{RESEARCH_STANDARD_ROOT}}", $RepoRoot)
+$RootAgentsContent = $RootAgentsContent.Replace("{{REGISTRY_FILE}}", $RegistryFile)
+
 if (Test-Path -LiteralPath $RootAgentsTarget) {
     if ($ForceRootAgents) {
         $Backup = "$RootAgentsTarget.backup_$(Get-Date -Format 'yyyyMMdd_HHmmss')"
         Write-Step "Backing up existing root AGENTS.md to $Backup"
         Copy-Item -LiteralPath $RootAgentsTarget -Destination $Backup -Force
-        Copy-Item -LiteralPath $RootAgentsSource -Destination $RootAgentsTarget -Force
+        Set-Content -LiteralPath $RootAgentsTarget -Value $RootAgentsContent -Encoding UTF8
         Write-Step "Updated root AGENTS.md."
     }
     else {
         Write-Step "Root AGENTS.md already exists. Leaving it unchanged."
+        Write-Step "Use -ForceRootAgents if the existing file points to old paths."
     }
 }
 else {
-    Copy-Item -LiteralPath $RootAgentsSource -Destination $RootAgentsTarget
+    Set-Content -LiteralPath $RootAgentsTarget -Value $RootAgentsContent -Encoding UTF8
     Write-Step "Installed root AGENTS.md."
 }
 
@@ -62,6 +78,14 @@ if (-not $SkipSkillInstall) {
 
     Copy-Item -LiteralPath $SkillSource -Destination $SkillParent -Recurse -Force
     Write-Step "Installed Codex skill: $SkillTarget"
+
+    $SkillManifest = Join-Path $SkillTarget "SKILL.md"
+    if (Test-Path -LiteralPath $SkillManifest) {
+        Write-Step "Skill manifest verified: $SkillManifest"
+    }
+    else {
+        throw "Skill install failed: SKILL.md was not found at $SkillManifest"
+    }
 }
 else {
     Write-Step "Skipped Codex skill install."
@@ -76,4 +100,3 @@ else {
 }
 
 Write-Step "Done."
-

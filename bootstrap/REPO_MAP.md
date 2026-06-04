@@ -1,7 +1,8 @@
 # Repository Map
 
-This map records the currently known Git layout for the local `D:\MT5` workspace.
-It exists to prevent accidentally pushing the wrong scope.
+This map records the currently known Git layout for the original local `D:\MT5`
+workspace. On another computer, replace `D:\MT5` with that computer's real MT5
+workspace root. This file exists to prevent accidentally pushing the wrong scope.
 
 ## Portable Governance Repo
 
@@ -10,6 +11,12 @@ Path:   D:\MT5\RESEARCH_STANDARD
 Branch: main
 Remote: https://github.com/zxiaohua980-sketch/research-standard.git
 Scope:  research standards, Codex quant-research skill, bootstrap helpers
+```
+
+On another machine this may be, for example:
+
+```text
+E:\Trading\MT5\RESEARCH_STANDARD
 ```
 
 Use this repo on another computer to install the research rules and skill.
@@ -61,4 +68,3 @@ D:\MT5\SBL
 Push one repository at a time from its own directory. Do not initialize or push
 the whole `D:\MT5` directory unless a separate manifest/submodule design has
 been chosen deliberately.
-

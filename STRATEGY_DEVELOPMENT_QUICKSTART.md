@@ -10,7 +10,7 @@
 ```
 Day 1: 假说 → 第一次回测
 ├─ 读 README.md（1 分钟）
-├─ 读 CLAUDE.md 十大禁区（3 分钟）  
+├─ 读 CLAUDE.md 十二大禁区（3 分钟）
 ├─ 读 STRATEGY_DEVELOPMENT_STANDARD.md 建立目录（2 分钟）
 └─ 开始写策略（30 分钟）
 
@@ -633,7 +633,7 @@ git commit -m "[FORWARD] strategy_id=STRAT_RSI_001, action=forward-live
 
 | 阶段 | 优先文档 | 次要文档 | 预计时间 |
 |------|----------|----------|---------|
-| **初始化** | README.md, CLAUDE.md 十大禁区 | GIT_AND_REPRODUCIBILITY_STANDARD.md | 30 min |
+| **初始化** | README.md, CLAUDE.md 十二大禁区 | GIT_AND_REPRODUCIBILITY_STANDARD.md | 30 min |
 | **开发环境** | STRATEGY_DEVELOPMENT_STANDARD.md | GIT_AND_REPRODUCIBILITY_STANDARD.md | 1 day |
 | **假说** | RESEARCH_WORKFLOW.md Stage 1 | README.md | 30 min |
 | **审计** | RESEARCH_WORKFLOW.md Stage 2 | STRATEGY_DEVELOPMENT_STANDARD.md | 1 day |

@@ -13,6 +13,21 @@ Lookahead checks answer one question: was every feature, filter, session label, 
 
 Current high, low, close, range, candle color, and session final statistics are future data until the bar or session is complete. If such fields influence an entry, the entry must occur after they are known.
 
+## Multi-timeframe features
+
+Higher-timeframe bars must be timestamped by their actual close/available time, not by a
+misleading open-time label. For every lower-timeframe decision row, assert:
+
+```text
+feature_available_at <= decision_time
+```
+
+If timestamp semantics are unknown, use only the prior fully completed higher-timeframe bar.
+Do not forward-fill an H1/H4/D1 row labeled by open time into lower-timeframe rows before that
+higher-timeframe bar has closed. `merge_asof` must join backward on `available_at`; forward,
+nearest, backfill, centered rolling and negative shifts are blocking unless explicitly proven
+safe by the MTF timing audit.
+
 ## Future high/low/close
 
 Columns with names such as `future_high`, `future_low`, `next_close`, `max_forward`, `target_hit`, `label`, or `outcome` are labels or diagnostics. They must not be used as entry features or filters.
@@ -43,4 +58,5 @@ Audit every dataset with:
 - `signal_time < entry_time` for event-driven entries;
 - `signal_bar_index < entry_bar_index` for bar-close execution;
 - no same-bar close fill when the signal uses that close;
+- for MTF signals, no `source_htf_close_time` or `feature_available_at` later than the decision time;
 - clear exception only for tick/event strategies with ordered timestamps and latency assumptions.

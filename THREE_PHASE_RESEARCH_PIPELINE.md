@@ -13,6 +13,8 @@
 - 代码不犯致命错误；
 - 文件和版本不乱；
 - 每个结果可以回溯到代码、配置、数据和时间；
+- 多周期特征只能使用决策当时已经完成且可见的数据；
+- 每个正式版本都有自己的文件夹，不能读取其他版本的回测数据和记录；
 - 探索结果不会被误标为 OOS、forward-live 或可实盘证据。
 
 ---
@@ -67,6 +69,7 @@ not forward-live
 Phase 1 不要求完整正式审计报告，但每次快测前必须检查：
 
 - 是否有未来函数或数据泄漏；
+- 如果使用多周期，是否把未完成的高周期 bar 提前合并进低周期决策；
 - bar-close 信号是否在下一根或下一可成交报价执行；
 - SL/TP 方向是否合法；
 - 同一根 OHLC 同时触及 SL/TP 时是否使用预声明规则；
@@ -157,6 +160,7 @@ promote_to_candidate
 - 有明确策略目录；
 - 有最小 registry 记录；
 - 有 `version.json`；
+- 有独立 `versions/<version>/` 目录和 `version_manifest.yaml`；
 - 有固定的候选规则和配置。
 
 ### 最小 registry
@@ -179,7 +183,9 @@ next_action:
 
 ```text
 固定候选逻辑
+建立独立 version_root
 完整执行审计
+多周期时间可用性审计（如适用）
 常规回测
 盈亏比平台检查
 数量归因
@@ -206,8 +212,11 @@ next_action:
 ### 必须产物
 
 - `version.json`；
+- `versions/<version>/version_manifest.yaml`；
 - `config.yaml` 或等价配置；
 - `execution_audit.md`；
+- `mtf_timing_audit.md`（如果使用多周期）；
+- `version_isolation_check.json`；
 - `quick_test_report.md` 或正式报告；
 - `attribution_report.md`；
 - `logic_change_proposal.md`；
@@ -218,6 +227,8 @@ next_action:
 
 Phase 2 末端、冻结候选前，必须执行 bar-by-bar replay。普通批量回测好看不代表策略可以运行。
 
+如果策略使用多周期或重采样特征，逐根回测前必须先通过 `MTF_LOOKAHEAD_AND_VERSION_ISOLATION_STANDARD.md` 的时间可用性审计。逐根引擎必须按当时已经完成的数据增量计算高周期特征，不能预先读入未来已经完成的高周期特征表。
+
 逐根回测必须模拟：
 
 - bar close 后确认信号；
@@ -225,6 +236,7 @@ Phase 2 末端、冻结候选前，必须执行 bar-by-bar replay。普通批量
 - 持仓状态逐根更新；
 - SL/TP、gap、collision 的真实顺序；
 - breakeven/trailing/timeout 只使用当时已知信息；
+- MTF 特征只使用 `feature_available_at <= decision_time` 的高周期 bar；
 - one signal bar only one execution；
 - 重启后状态恢复；
 - 成本和成交模型与候选配置一致。
@@ -232,6 +244,7 @@ Phase 2 末端、冻结候选前，必须执行 bar-by-bar replay。普通批量
 必须输出三类对账：
 
 - signal diff：常规回测信号 vs 逐根信号；
+- mtf feature diff：普通批量高周期特征 vs 逐根当时可见高周期特征；
 - trade diff：常规回测交易 vs 逐根交易；
 - equity diff：常规回测权益 vs 逐根权益。
 
@@ -241,8 +254,29 @@ Phase 2 末端、冻结候选前，必须执行 bar-by-bar replay。普通批量
 - 交易数量一致或差异可解释；
 - entry/exit 时间差异可解释；
 - PnL 差异在成本、滑点或 gap 模型范围内；
-- 无未来函数、无同 bar 理想成交、无重复开仓、无状态漂移；
+- 无未来函数、无未完成高周期 bar 泄漏、无同 bar 理想成交、无重复开仓、无状态漂移；
 - 输出 `bar_by_bar_replay_report.md`。
+
+### 版本文件夹隔离关口
+
+Phase 2+ 执行"一个版本，一个文件夹"：
+
+```text
+strategy_root/
+  versions/
+    v0_1/
+      version_manifest.yaml
+      src/
+      config/
+      data/
+      backtests/
+      audits/
+      reports/
+      cache/
+      logs/
+```
+
+所有正式 backtest/replay 输出必须写入当前 `versions/<version>/`。除带 hash 的只读市场数据快照外，当前版本不得读取其他版本的 `backtests/`、`reports/`、`cache/`、`trades.csv`、`signals.csv` 或 loose `saved_runs`。发现跨版本读取时，本轮结果降级为 `version_isolation_unverified / not decision-grade`，需要清理路径并重新运行。
 
 ### Phase 2 结论
 
@@ -268,6 +302,8 @@ freeze_candidate
 - 参数冻结；
 - 成本和成交模型冻结；
 - 逐根回测通过；
+- MTF 时间可用性审计通过（如适用）；
+- 版本文件夹隔离检查通过；
 - Git commit 和 config hash 明确；
 - 不再边运行边改策略逻辑。
 
@@ -328,8 +364,10 @@ Demo runtime 日志不能当作 OOS-Final；只有冻结时间之后新产生的
 | 完整 registry | 不强制 | 强制 | 强制 |
 | data ledger | 不强制，但不得声称 OOS | 强制用于正式验证 | 记录 forward/demo 边界 |
 | 执行审计 | 致命审计 | 完整审计 | runtime 执行一致性审计 |
+| MTF 时间审计 | 致命审计 | 多周期策略强制 | 与冻结版本对齐 |
+| 版本文件夹隔离 | 建议 | 强制 | 继承冻结版本根目录 |
 | 盈亏比测试 | 强制 | 强制复核 | 不适用 |
 | 多维归因 | 强制 | 强制 | 不适用 |
-| 逐根回测 | 可选 | 冻结前强制 | runtime 对齐依据 |
+| 逐根回测 | 可选 | 冻结前强制，MTF 需 feature diff | runtime 对齐依据 |
 | EXE 打包 | 禁止 | 准备交接 | 强制安全门 |
 | REAL 下单 | 禁止 | 禁止 | 禁止 |

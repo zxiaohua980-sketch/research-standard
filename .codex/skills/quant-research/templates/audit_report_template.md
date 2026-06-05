@@ -7,6 +7,7 @@
 - audited_artifacts:
 - generated_at:
 - git_commit:
+- version_root:
 - read_only: true
 
 ## Input Integrity
@@ -22,6 +23,7 @@
 - output hashes:
 - generated timestamps:
 - overwrite risk:
+- version isolation status:
 
 ## Checks
 
@@ -34,11 +36,14 @@
 - signal_time / entry_time:
 - bar index ordering:
 - current bar inclusion:
+- MTF feature available_at:
+- MTF boundary samples:
 - bid/ask and costs:
 - SL/TP direction:
 - same-bar SL/TP collision:
 - session/timezone:
 - data split ledger:
+- version folder isolation:
 - survivorship/missing rows:
 - output required fields:
 

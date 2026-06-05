@@ -2,7 +2,7 @@
 
 ## 核心原则
 
-任何进入前向交易（forward-live）的策略都必须被冻结。冻结意味着代码、参数、成交时点、SL/TP 与动态退出、头寸规模、成本模型、数据使用台账以及所有决策相关的信息都被记录和锁定，通过 Git tag 和版本号绑定，确保可追溯性和重复性。具体退出/风险清单见 `EXIT_RISK_AND_LOGIC_REFINEMENT_STANDARD.md`，IS/OOS 证据分类见 `DATA_SPLIT_AND_OOS_POLICY.md`。
+任何进入前向交易（forward-live）的策略都必须被冻结。冻结意味着代码、参数、成交时点、SL/TP 与动态退出、头寸规模、成本模型、数据使用台账、多周期时间可用性证据、版本目录隔离证据以及所有决策相关的信息都被记录和锁定，通过 Git tag 和版本号绑定，确保可追溯性和重复性。具体退出/风险清单见 `EXIT_RISK_AND_LOGIC_REFINEMENT_STANDARD.md`，IS/OOS 证据分类见 `DATA_SPLIT_AND_OOS_POLICY.md`，MTF 和版本目录隔离见 `MTF_LOOKAHEAD_AND_VERSION_ISOLATION_STANDARD.md`。
 
 ---
 
@@ -33,6 +33,27 @@ v1.1        在 v1.0 基础上的改进
 ---
 
 ## 第二部分：冻结内容详细清单
+
+### 版本目录冻结
+
+Phase 2+ 每个候选版本必须有独立版本根目录：
+
+```text
+strategy_root/
+  versions/
+    v0_1/
+      version_manifest.yaml
+      src/
+      config/
+      data/
+      backtests/
+      audits/
+      reports/
+      cache/
+      logs/
+```
+
+冻结时必须记录 `version_manifest.yaml` 的 hash、当前 version_root、允许的只读市场数据快照、所有正式输出目录，以及 `version_isolation_check.json`。冻结候选不得读取其他版本的 backtest/report/cache/log/trades/signals 作为输入。
 
 ### 代码冻结
 
@@ -88,6 +109,11 @@ Exit Rules:
 Conflict Rules:
   No concurrent long/short on same symbol
   Max 5 concurrent positions across portfolio
+
+MTF Timing Rules:
+  Higher-timeframe features use feature_available_at <= decision_time
+  Unknown timestamp semantics default to prior completed HTF bar
+  MTF timing audit report: audits/mtf_timing_audit.md
 ```
 
 ### 成本模型冻结
@@ -239,7 +265,16 @@ git push origin frozen-v0.1
     "exit_rules": "TP at 1.5R from entry, SL at 1.0R from entry",
     "collision_rules": "If OHLC bar touches SL and TP and no ordered tick data exists, SL-first",
     "conflict_rules": "No concurrent long/short same symbol, max 5 positions total",
-    "cost_model": "bid_ask=0.0002, commission=0.001, slippage=0.00005"
+    "cost_model": "bid_ask=0.0002, commission=0.001, slippage=0.00005",
+    "mtf_timing_rule": "feature_available_at <= decision_time; unknown labels use prior completed HTF bar"
+  },
+
+  "version_isolation": {
+    "version_root": "versions/v0_1",
+    "version_manifest": "versions/v0_1/version_manifest.yaml",
+    "version_manifest_hash": "sha256:...",
+    "version_isolation_check": "versions/v0_1/audits/version_isolation_check.json",
+    "cross_version_inputs_allowed": false
   },
 
   "data_freeze": {
@@ -294,6 +329,8 @@ git push origin frozen-v0.1
     "rule_freeze": true,
     "data_freeze": true,
     "data_usage_ledger_frozen": true,
+    "mtf_timing_audit_passed": true,
+    "version_isolation_check_passed": true,
     "git_tag_created": true,
     "version_json_updated": true,
     "registry_updated": true,
@@ -377,6 +414,8 @@ git push origin frozen-v0.1
 - ❌ 改变既有的 frozen tag（tags 是不可变的）
 - ❌ 混合 v0.1 和 v0.2 的 forward 数据
 - ❌ 在 forward-v0.1 上改参数或规则
+- ❌ 让 v0.2 的回测读取 v0.1 的 backtests/reports/cache/trades/signals
+- ❌ 在 MTF 时间可用性审计失败时冻结版本
 
 ---
 
@@ -430,4 +469,4 @@ Create v0.2 branch → [Repeat from Stage 6+]
 
 ## 总结
 
-版本冻结的目的是确保可追溯性和重复性。通过 Git tag、version.json 和分支管理，每个策略版本都能被精确定位和重现。这是防止"不知道哪个版本赚钱"这类问题的唯一方式。
+版本冻结的目的是确保可追溯性和重复性。通过 Git tag、version.json、version_manifest.yaml、独立版本目录和分支管理，每个策略版本都能被精确定位和重现。这是防止"不知道哪个版本赚钱"以及"错误读取其他版本数据"这类问题的唯一方式。

@@ -46,9 +46,9 @@
 ### 1. CLAUDE.md
 **Claude Code / Codex 策略研究最高优先级指令**
 
-这是 Claude Code 执行任何策略任务时的最高约束。包含十大禁区和每次接收任务时的必做检查表。
+这是 Claude Code 执行任何策略任务时的最高约束。包含十二大禁区和每次接收任务时的必做检查表。
 
-**十大禁区**：
+**十二大禁区**：
 1. 禁止在没有执行审计的情况下相信回测结果
 2. 禁止在没有 Trade Attribution 的情况下新增 filter
 3. 禁止用全样本选择参数
@@ -59,6 +59,8 @@
 8. 每一个新策略必须先登记到 registry
 9. 每一个策略必须有独立目录
 10. 每一次策略规则变化必须开启新版本或新分支
+11. 禁止未通过多周期时间可用性审计的 MTF 回测进入正式结论
+12. 禁止跨版本读取回测数据、报告、缓存或记录
 
 **何时使用**：Claude Code 接到每个策略任务时必读。
 
@@ -236,12 +238,21 @@
 
 ---
 
+### 13. MTF_LOOKAHEAD_AND_VERSION_ISOLATION_STANDARD.md
+**多周期未来函数与版本文件夹隔离标准**
+
+定义 MTF `feature_available_at <= decision_time`、高周期 bar 可见性、逐根 MTF feature diff、一个版本一个文件夹、`version_manifest.yaml` 和跨版本路径隔离。
+
+**何时使用**：任何多周期、resample、merge_asof、高周期 filter、逐根回测、版本目录、回测输出或跨版本对比任务必读。
+
+---
+
 ## 快速导航
 
 ### 如果你是...
 
 **新手研究员**：
-1. 先读 CLAUDE.md（了解十大禁区）
+1. 先读 CLAUDE.md（了解十二大禁区）
 2. 再读 GIT_AND_REPRODUCIBILITY_STANDARD.md（了解 Git 规范）
 3. 然后读 RESEARCH_WORKFLOW.md（了解完整流程）
 
@@ -275,15 +286,17 @@
 | **Strategy Version** | 用 v<major>.<minor> 标记，v0.1 是首个发布版 | Stage 11 冻结、后续版本升级时 |
 | **Registry** | 中央策略登记簿，记录所有策略的状态、版本、责任人 | Stage 0 创建、每个 Stage 完成后更新 |
 | **Look-Ahead Bias** | 在回测中使用了未来数据的错误，必须在 Stage 2 Execution Audit 中检查 | 每个新回测、新数据源时检查 |
+| **MTF Timing Audit** | 证明高周期特征在低周期决策时已经完成且可见 | 任何多周期或重采样策略 |
+| **Version Root** | `versions/<version>/` 独立目录，隔离本版本代码、配置、输出、报告和缓存 | Phase 2+ 每个候选版本 |
 | **Overfitting** | 参数过度优化到特定历史数据，导致样本外性能急剧下降 | Stage 7 优化时严防，Stage 8 WF 评估 |
 
 ---
 
 ## 一句话总结
 
-**如果结果不能定位到 commit hash，则结果不可信。**
+**如果结果不能定位到 commit hash、config hash、data snapshot、version root，则结果不可信。**
 
-所有的分析、回测、优化、诊断都必须能够回答："这个结果来自哪个 commit？使用的是什么参数？基于什么数据？生成时间是什么时候？"。没有这四样信息，研究无法复现，无法审计，无法信任。
+所有的分析、回测、优化、诊断都必须能够回答："这个结果来自哪个 commit？使用的是什么参数？基于什么数据？属于哪个 version_root？生成时间是什么时候？"。没有这些信息，研究无法复现，无法审计，无法信任。
 
 ---
 
@@ -301,5 +314,5 @@
 ---
 
 **创建时间**：2025-06-01
-**最后更新**：2025-09-15
+**最后更新**：2026-06-05
 **维护者**：Claude Code, Quantitative Research Team

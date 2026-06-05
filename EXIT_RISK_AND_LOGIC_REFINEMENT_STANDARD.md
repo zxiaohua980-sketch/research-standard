@@ -18,6 +18,10 @@ cost model creates a new strategy version or experiment branch.
 Before a baseline backtest is considered auditable, the strategy must declare exactly when a
 decision becomes known and at what price an order could be executed.
 
+If the strategy uses multiple timeframes, resampling, or higher-timeframe filters, the
+decision model must also declare the source bar close time and `available_at` time for each
+higher-timeframe feature. See `MTF_LOOKAHEAD_AND_VERSION_ISOLATION_STANDARD.md`.
+
 ### Bar-close strategies
 
 Default rule for OHLC/bar-based research:
@@ -103,6 +107,10 @@ No result using SL/TP may proceed unless the audit explicitly records PASS/FAIL 
 8. Position size is derived from pre-entry risk, with portfolio exposure limits applied.
 9. End-of-sample open positions and forced liquidation treatment are reported separately.
 10. Backtest and forward/live engines use equivalent decision, sizing and exit conventions.
+11. Multi-timeframe features, if any, satisfy `feature_available_at <= decision_time` for
+    every signal and store source higher-timeframe close/available times in the output.
+12. Phase 2+ outputs and mutable inputs stay inside the active `versions/<version>/` folder,
+    except immutable hash-declared market data snapshots.
 
 Any failed item means the reported metrics are not decision-grade.
 
@@ -130,6 +138,7 @@ The replay report must include three diffs:
 
 | Diff | Required comparison |
 |------|---------------------|
+| MTF feature diff | batch higher-timeframe features vs replay-time visible higher-timeframe features, when MTF is used |
 | Signal diff | batch backtest signals vs replay signals |
 | Trade diff | batch backtest trades vs replay trades |
 | Equity diff | batch backtest equity/PnL vs replay equity/PnL |
@@ -137,9 +146,11 @@ The replay report must include three diffs:
 Passing criteria:
 
 - signal count and trade count match, or every difference is explained;
+- MTF feature values are generated from information visible at that replay step;
 - entry and exit times are reproducible under the declared timing model;
 - PnL differences stay within the declared spread/slippage/gap model;
-- no lookahead, same-bar ideal fill, duplicate open, illegal SL/TP direction or state drift;
+- no lookahead, incomplete higher-timeframe bar use, same-bar ideal fill, duplicate open,
+  illegal SL/TP direction, cross-version input or state drift;
 - output `bar_by_bar_replay_report.md` before freeze.
 
 If this gate fails, the candidate returns to Phase 2 iteration. It cannot enter EXE dry-run or
@@ -292,6 +303,8 @@ Before Stage 13 live deployment, document at minimum:
 | Stage | Required Output for Exit/Risk Work |
 |-------|------------------------------------|
 | Stage 2 | `execution_audit.md` with the SL/TP audit checklist |
+| Stage 2 MTF | `mtf_timing_audit.md` or equivalent section |
+| Phase 2 version isolation | `version_manifest.yaml` and `version_isolation_check.json` |
 | Stage 5 | `trade_attribution_report.md` with exit cohorts |
 | Stage 6 | `logic_change_proposal.md` and `logic_refinement.md` |
 | Stage 7 | full candidate/parameter output with dataset ledger |

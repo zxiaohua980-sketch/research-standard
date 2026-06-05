@@ -16,6 +16,7 @@
 
 - `DATA_SPLIT_AND_OOS_POLICY.md`：定义 IS、OOS-Dev、OOS-Final、WF-OOS、Forward-Live 与数据消费台账。
 - `EXIT_RISK_AND_LOGIC_REFINEMENT_STANDARD.md`：定义成交时点、SL/TP、动态退出、头寸规模和逻辑调整门槛。
+- `MTF_LOOKAHEAD_AND_VERSION_ISOLATION_STANDARD.md`：定义多周期时间可用性审计、逐根 MTF 对账、一个版本一个文件夹和跨版本路径隔离。
 
 ---
 
@@ -52,15 +53,24 @@
 4. **建立项目目录结构**：
    ```
    strategy_root/
-   ├── signal_engine.py
-   ├── backtest.py
-   ├── config.yaml
-   ├── version.json
+   ├── versions/
+   │   └── v0_1/
+   │       ├── version_manifest.yaml
+   │       ├── src/
+   │       ├── config/
+   │       ├── data/
+   │       ├── backtests/
+   │       ├── audits/
+   │       ├── reports/
+   │       ├── cache/
+   │       └── logs/
+   ├── shared_market_data/
    ├── README.md
    ├── tests/
-   ├── output/
    └── .git/
    ```
+
+   旧式根目录单文件布局只能用于 Phase 1 或 legacy 读取。任何 Phase 2+ 正式候选必须迁移到 `versions/<version>/`，并禁止读取其他版本的 backtest/report/cache/log。
 
 5. **编写初始 README.md**：包含 strategy_id、信号假说一句话版、预期交易频率、目标市场。
 
@@ -98,6 +108,7 @@
 - registry 中有明确的 strategy_id 记录
 - Git repo 初始化完成，有至少一个 commit
 - 项目目录结构已建立，README 可读
+- Phase 2+ 候选有独立 `versions/<version>/version_manifest.yaml`
 
 ---
 
@@ -153,6 +164,8 @@
    - 检查 RSI、MACD、MA 等指标是否使用了订单提交后才可知的信息。
    - 禁止使用 `bar t` 的 close 生成信号后，又假设订单按同一个 close 无滑点成交；若确有逐 tick 执行证据，必须记录事件顺序。
    - 检查是否有"当日 high/low"用于止损或获利，如果有，这是未来数据，必须改为前一日的数据或前一根 bar 的数据。
+   - 如果使用多周期，必须证明高周期特征的 `available_at <= decision_time`；open-time labeled 高周期 bar 不得提前合并到未完成的低周期 bar。
+   - 对 MTF、resample、merge_asof、ZigZag/pivot/fractal/swing/divergence 确认逻辑，必须输出 `mtf_timing_audit.md` 或等价审计段落。
 
 2. **入场当根止损/获利逻辑**：
    - 确认 initial SL、initial TP、动态退出和头寸规模都可在提交订单时由已知数据计算。
@@ -203,7 +216,13 @@
    ## Conclusion: PASS / FAIL
    ```
 
-9. **Commit 审计结果**：
+9. **版本隔离审计**：
+   - 确认当前正式运行绑定 `versions/<version>/version_manifest.yaml`。
+   - 确认所有 output/report/cache/log 写入当前 version_root。
+   - 确认当前版本没有读取其他版本的 `backtests/`、`reports/`、`cache/`、`trades.csv`、`signals.csv` 或 loose `saved_runs`。
+   - 输出 `version_isolation_check.json`。
+
+10. **Commit 审计结果**：
    ```
    [AUDIT] strategy_id=STRAT_RSI_001, action=audit-fix
    
@@ -216,11 +235,15 @@
 
 ### 产出
 - execution_audit.md（详细报告）
+- mtf_timing_audit.md（多周期策略必需）
+- version_isolation_check.json（Phase 2+ 必需）
 - 修正后的 signal_engine.py 或 backtest.py
 - audit pass/fail 的明确标记
 
 ### 通过标准
 - 没有前视偏差
+- 多周期特征全部通过时间可用性审计（如适用）
+- 没有跨版本读取回测输出、报告、缓存或记录
 - 费用模型合理且对称
 - 成交、SL/TP、gap、collision、position sizing 与 MT5/broker 约束审计通过
 - 样本完整，末端没有未平仓或被切割的交易
@@ -1072,6 +1095,8 @@
    - Risk management：SL/TP、trailing/breakeven/timeout（如有）、R 定义、头寸大小和风险上限
    - Execution model：信号决策时点、fill 时点、bid/ask、gap 与同 bar SL/TP collision 规则
    - Conflict rule：如何处理冲突持仓
+   - MTF timing rule：每个高周期特征的 available_at 规则和审计报告引用（如适用）
+   - Version isolation rule：冻结候选所在 `versions/<version>/`、version_manifest hash 和路径隔离检查引用
 
 5. **生成冻结 manifest 和版本号**：格式为 `v<major>.<minor>`，例如 `v0.1`。第一个发布版本通常是 v0.1。`version.json` 在 freeze commit 中记录文件/config/data hash、规则和预定 tag；它不能预知并包含承载其自身的 commit hash。实际 frozen commit hash 由随后的 Git tag 和 registry 记录。
    ```json
@@ -1087,6 +1112,8 @@
      "execution_model": "signal on bar t close, market fill on first executable quote of bar t+1, SL-first on ambiguous OHLC collision",
      "cost_model": "bid_ask=0.0002, commission=0.001",
      "conflict_rules": "no concurrent long/short",
+     "mtf_timing_audit": "audits/mtf_timing_audit.md",
+     "version_isolation_manifest": "version_manifest.yaml",
      "signal_engine_version": "0.1",
      "backtest_engine_version": "v1.0",
      "data_start": "2020-01-01",
@@ -1180,6 +1207,9 @@
 
 ### 产出
 - version.json（完整的冻结信息）
+- version_manifest.yaml（版本目录、输入输出根、hash 与路径隔离记录）
+- mtf_timing_audit.md（多周期策略必需）
+- version_isolation_check.json
 - frozen_report.md（汇总报告）
 - Git tag（v0.1-frozen）
 - 可选的 frozen-v0.1 分支
@@ -1188,6 +1218,7 @@
 ### 通过标准
 - 所有 Stage 1-10 都通过
 - version.json 记录冻结 manifest（code hash、config hash、framework_start_time），registry/tag annotation 记录 frozen commit hash
+- MTF 与版本隔离门禁通过；否则不得冻结
 - Git tag 已创建并 push
 - 冻结报告明确写出风险和局限性，不隐瞒缺点
 

@@ -9,7 +9,7 @@
 
 ---
 
-## 🚫 十大禁区（必背）
+## 🚫 十二大禁区（必背）
 
 1. ❌ 没审计就信回测结果 → `先读 Stage 2`
 2. ❌ 没归因就加 filter → `先读 TRADE_ATTRIBUTION_STANDARD.md`
@@ -21,6 +21,8 @@
 8. ❌ 没注册到 registry → `先读 PROJECT_REGISTRY_STANDARD.md`
 9. ❌ 策略目录混乱 → `按 STRATEGY_DEVELOPMENT_STANDARD.md 建立`
 10. ❌ 不开新版本就改规则 → `改规则 = 新版本 = 新 tag`
+11. ❌ MTF 未审计就信回测 → `先读 MTF_LOOKAHEAD_AND_VERSION_ISOLATION_STANDARD.md`
+12. ❌ 跨版本读取旧输出 → `一个版本，一个文件夹`
 
 ---
 
@@ -132,6 +134,7 @@ backtest.py            ← 交易执行（绝对不能混）
 config.yaml            ← 参数配置
 .gitignore             ← 排除输出文件
 version.json           ← 版本记录
+version_manifest.yaml  ← Phase 2+ 版本根目录记录
 README.md              ← 项目文档
 ```
 
@@ -139,6 +142,8 @@ README.md              ← 项目文档
 
 ```
 Stage 2: execution_audit.md
+Stage 2 MTF: mtf_timing_audit.md（多周期必需）
+Phase 2+: version_isolation_check.json
 Stage 3: event_study_report.md
 Stage 4: fixed_rule_backtest.md
 Stage 5: trade_attribution.md ⭐⭐⭐
@@ -175,6 +180,8 @@ Stage 12: forward_live_state.json
 |------|------|--------|
 | 全样本优化 | Sharpe 很高但 OOS 崩坏 | 用 IS/OOS-Dev/OOS-Final/Forward 重新设计，并登记已消费数据 |
 | 前视偏差 | backtest Sharpe > 2.0 | 检查是否用了未来数据 |
+| MTF 未来函数 | 普通回测和逐根回测差距巨大 | 检查高周期 `available_at <= decision_time` |
+| 跨版本读错文件 | 新版本结果解释不清 | 检查 `versions/<version>/` 和路径守卫 |
 | 样本太小加 filter | 优化了但前向崩盘 | 要求 >= 30 笔样本 |
 | 环境不好删掉 | Sharpe 漂亮但现实失效 | 不要删，这是市场真相 |
 | 连亏就改 | 频繁改规则 | 等 30 笔再评估 |
@@ -193,6 +200,8 @@ Stage 12: forward_live_state.json
 | **假说驱动** | 凭数据选参，不凭直觉 |
 | **环境尊重** | 找出弱点，不要删除 |
 | **版本清晰** | commit hash 是真理 |
+| **目录隔离** | 一个版本，一个文件夹 |
+| **MTF 严格** | 高周期必须先完成再可用 |
 | **冻结严格** | forward 中一个标点都不改 |
 | **样本至上** | < 30 笔 = 无效 |
 | **时间验证** | 前向是最后的试金石 |
@@ -204,7 +213,7 @@ Stage 12: forward_live_state.json
 ```
 想开发新策略
 ├─ 先读: README.md (1 min)
-├─ 再读: CLAUDE.md 十大禁区 (3 min)
+├─ 再读: CLAUDE.md 十二大禁区 (3 min)
 ├─ 建立: STRATEGY_DEVELOPMENT_STANDARD.md
 └─ 开发: RESEARCH_WORKFLOW.md Stage 1-4
 
@@ -227,7 +236,8 @@ Stage 12: forward_live_state.json
 
 要冻结版本
 ├─ 读: VERSIONING_AND_FREEZE_POLICY.md
-├─ 生成: version.json
+├─ 生成: version.json + version_manifest.yaml
+├─ 通过: MTF timing / version isolation checks
 └─ 打标: git tag v0.1-frozen
 
 要开始 forward
@@ -249,6 +259,8 @@ Stage 12: forward_live_state.json
 |------|----------|----------|
 | 新策略怎么开始 | STRATEGY_DEVELOPMENT_STANDARD.md | "必需的目录结构" |
 | 怎么检查前视偏差 | RESEARCH_WORKFLOW.md Stage 2 | "Data Leakage Check" |
+| 多周期怎么防未来函数 | MTF_LOOKAHEAD_AND_VERSION_ISOLATION_STANDARD.md | "feature_available_at" |
+| 如何防止跨版本读错文件 | MTF_LOOKAHEAD_AND_VERSION_ISOLATION_STANDARD.md | "One Version, One Folder" |
 | 可以加这个 filter 吗 | TRADE_ATTRIBUTION_STANDARD.md | "七层检验" |
 | 全样本优化行不行 | OPTIMIZATION_POLICY.md | "禁止1" |
 | 为什么环境诊断不能删环境 | REGIME_VALIDATION_STANDARD.md | "禁止的做法" |
@@ -299,4 +311,4 @@ Stage 12: forward_live_state.json
 
 **打印这个文件，贴在你的电脑旁边。** 🖨️
 
-每当想偷懒时，看一眼十大禁区，冷静下来。
+每当想偷懒时，看一眼十二大禁区，冷静下来。

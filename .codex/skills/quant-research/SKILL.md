@@ -1,6 +1,6 @@
 ---
 name: quant-research
-description: Three-phase research operating system for MT5 and FX quantitative strategy work. Use when Codex works on exploratory alpha hypothesis testing, OHLC/tick backtests, win-rate/RR testing, MFE/MAE attribution, strategy version iteration, bar-by-bar replay, OOS/holdout governance, forward-live boundaries, or preparing a frozen candidate for MT5 dry-run/demo runtime packaging.
+description: Three-phase research operating system for MT5 and FX quantitative strategy work. Use when Codex works on exploratory alpha hypothesis testing, OHLC/tick backtests, multi-timeframe lookahead audits, version-folder isolation, win-rate/RR testing, MFE/MAE attribution, strategy version iteration, bar-by-bar replay, OOS/holdout governance, forward-live boundaries, or preparing a frozen candidate for MT5 dry-run/demo runtime packaging.
 ---
 
 # Quant Research
@@ -10,7 +10,7 @@ description: Three-phase research operating system for MT5 and FX quantitative s
 Use this skill to move trading ideas through a phase-aware research pipeline:
 
 1. **Phase 1 - Quick exploration**: turn hypotheses into code, fatal-audit the obvious traps, run quick tests, RR tests, and multi-dimensional attribution. Results are exploratory only.
-2. **Phase 2 - Candidate iteration**: register promising ideas, version them, audit execution, compare versions, perform attribution-driven changes, and require bar-by-bar replay before freeze.
+2. **Phase 2 - Candidate iteration**: register promising ideas, isolate each version folder, audit execution/MTF timing, compare versions, perform attribution-driven changes, and require bar-by-bar replay before freeze.
 3. **Phase 3 - EXE/demo runtime handoff**: hand a frozen candidate to MT5 runtime packaging with dry-run/demo safety gates. REAL trading is out of scope.
 
 This skill may help propose, quantify, implement, test, reject, and iterate exploratory strategy hypotheses. It must not present unverified exploration as alpha, OOS, forward-live, or live-ready evidence.
@@ -21,6 +21,8 @@ First read the nearest project `AGENTS.md`. If available, also read the strategy
 
 - If `AGENTS.md` conflicts with this skill, obey `AGENTS.md`.
 - If a strategy is unregistered, Phase 1 exploration can continue with `templates/idea_card_template.md`, but formal Phase 2+ research is blocked until a minimal registry record exists.
+- If a Phase 2+ version lacks its own `versions/<version>/` root and manifest, formal metrics are blocked as `version_isolation_unverified`.
+- If a multi-timeframe strategy lacks MTF timing evidence, formal metrics are blocked as `mtf_timing_unverified`.
 - Do not touch frozen or forward-live strategy code in place.
 - Do not place REAL orders, enable REAL-account trading, or treat demo/runtime logs as OOS-Final evidence.
 
@@ -31,7 +33,7 @@ Before acting, classify the task:
 | Phase | Use when | Registry | Evidence label |
 |------|----------|----------|----------------|
 | Phase 1 exploration | new hypothesis, quick code, quick backtest, RR test, MFE/MAE, loss attribution | optional | `exploratory_not_decision_grade` |
-| Phase 2 candidate iteration | promising idea, versioned strategy, formal audit, logic change, parameter/RR platform, bar-by-bar replay | required | `candidate_not_final` until freeze/holdout |
+| Phase 2 candidate iteration | promising idea, isolated version root, formal audit, MTF timing audit, logic change, parameter/RR platform, bar-by-bar replay | required | `candidate_not_final` until freeze/holdout |
 | Phase 3 runtime packaging | frozen candidate, EXE, dry-run/demo scan/order simulation, runtime safety | required | `runtime_validation_not_oos_final` |
 
 If the phase is unclear, choose the lowest-risk phase and state the assumption.
@@ -45,6 +47,7 @@ Goal: find whether a profit mechanism may exist.
 3. Implement the smallest testable code when asked; keep it separate from frozen/live code.
 4. Run a fatal audit before trusting even exploratory output:
    - no future data or same-bar ideal fill;
+   - no incomplete higher-timeframe bar used in lower-timeframe decisions;
    - bar-close signals execute no earlier than next executable quote/bar;
    - SL/TP direction is legal;
    - same-bar SL/TP collision has a declared policy;
@@ -61,24 +64,26 @@ Phase 1 must not use locked final holdout and must not claim OOS, forward-live, 
 
 Goal: turn a promising idea into an auditable candidate.
 
-1. Require minimal registry and `version.json`.
+1. Require minimal registry, `version.json`, and one isolated `versions/<version>/` root.
 2. Record Git state before formal runs.
 3. Freeze the candidate's current rules for a baseline.
 4. Run full execution audit before using metrics for decisions.
-5. Produce baseline results, RR platform analysis, and attribution.
-6. For any logic/risk/exit/sizing/cost change, write a bounded change proposal and create a new version or experiment branch.
-7. Re-audit after changes and compare parent vs child versions.
-8. Maintain data split discipline: discovery/development data can guide iteration; locked final holdout is opened once only after rules are fixed.
-9. Before freeze or runtime handoff, run bar-by-bar replay using `templates/bar_by_bar_replay_report_template.md`.
-10. Decide only: `continue_iteration`, `return_to_exploration`, `reject`, or `freeze_candidate`.
+5. If MTF/resampling/higher-timeframe features are used, run `templates/mtf_timing_audit_template.md` and block unless `feature_available_at <= decision_time` is proven.
+6. Run version isolation check before formal backtests; outputs must stay inside the active version root and mutable inputs must not come from sibling versions.
+7. Produce baseline results, RR platform analysis, and attribution.
+8. For any logic/risk/exit/sizing/cost change, write a bounded change proposal and create a new version or experiment branch.
+9. Re-audit after changes and compare parent vs child versions.
+10. Maintain data split discipline: discovery/development data can guide iteration; locked final holdout is opened once only after rules are fixed.
+11. Before freeze or runtime handoff, run bar-by-bar replay using `templates/bar_by_bar_replay_report_template.md`.
+12. Decide only: `continue_iteration`, `return_to_exploration`, `reject`, or `freeze_candidate`.
 
-Bar-by-bar replay is mandatory before Phase 3. It must compare batch vs replay signals, trades and equity, and explain every material difference.
+Bar-by-bar replay is mandatory before Phase 3. It must compare batch vs replay MTF features, signals, trades and equity, and explain every material difference.
 
 ## Phase 3 Workflow
 
 Goal: package and verify a frozen candidate as a safe dry-run/demo runtime.
 
-1. Require frozen candidate identity: strategy id, version, commit, config hash, and bar-by-bar replay report.
+1. Require frozen candidate identity: strategy id, version, version root, commit, config hash, MTF timing audit if applicable, version isolation check, and bar-by-bar replay report.
 2. Create runtime handoff using `templates/runtime_handoff_template.md`.
 3. Use the `mt5-runtime-packager` skill for EXE packaging, MT5 path portability, dry-run/demo safety gates, order-intent journaling, signal execution ledger, startup reconciliation and portable deliverables.
 4. Default to dry-run. Demo order execution requires explicit user authorization and must remain DEMO-only with REAL hard rejection.
@@ -92,7 +97,7 @@ Phase 3 validates runtime behavior, not strategy profitability. Demo/runtime log
 Apply gates by phase:
 
 - Phase 1: fatal audit and evidence label are mandatory; full registry/data ledger is not mandatory.
-- Phase 2: registry, Git/version identity, execution audit, attribution, data split discipline and bar-by-bar replay are mandatory.
+- Phase 2: registry, Git/version identity, isolated version root, execution audit, MTF timing audit when applicable, attribution, data split discipline and bar-by-bar replay are mandatory.
 - Phase 3: frozen candidate handoff, runtime safety gates, REAL rejection and portable package audit are mandatory.
 
 If a guard blocks formal research, do not stop all work automatically. Either downgrade to Phase 1 exploration with explicit labels or ask for the missing formal artifact when the user wants decision-grade output.
@@ -105,6 +110,7 @@ Load only what is needed:
 - `RESEARCH_WORKFLOW.md`: formal Stage 0-13 details for Phase 2+.
 - `DATA_SPLIT_AND_OOS_POLICY.md`: OOS, holdout and data-consumption rules.
 - `EXIT_RISK_AND_LOGIC_REFINEMENT_STANDARD.md`: execution, SL/TP, sizing, logic changes and bar-by-bar replay.
+- `MTF_LOOKAHEAD_AND_VERSION_ISOLATION_STANDARD.md`: MTF timing availability, bar-by-bar feature diffs, one-version-one-folder rules and path isolation.
 - `references/lookahead-bias-standard.md`: timing and future-data audit.
 - `references/strategy-attribution-standard.md`: attribution before formal rule changes.
 - `references/backtest-interpretation-standard.md`: interpreting metrics without overclaiming.
@@ -119,6 +125,8 @@ Use:
 - `templates/idea_card_template.md` for Phase 1 ideas.
 - `templates/quick_test_report_template.md` for Phase 1 quick tests and RR matrix.
 - `templates/audit_report_template.md` for execution audits.
+- `templates/mtf_timing_audit_template.md` for multi-timeframe timing audits.
+- `templates/version_isolation_manifest_template.yaml` for Phase 2+ version roots.
 - `templates/logic_change_proposal_template.md` before formal Phase 2 rule changes.
 - `templates/strategy_report_template.md` for candidate reports.
 - `templates/bar_by_bar_replay_report_template.md` before freezing a candidate.
@@ -132,6 +140,8 @@ Scripts are diagnostic helpers, not proof of validity:
 - `scripts/signal_timing_check.py`
 - `scripts/session_timezone_check.py`
 - `scripts/lookahead_audit.py`
+- `scripts/mtf_lookahead_audit.py`
+- `scripts/version_isolation_check.py`
 - `scripts/trade_consistency_check.py`
 - `scripts/data_split_ledger_check.py`
 - `scripts/output_integrity_check.py`
@@ -157,6 +167,8 @@ Phase 2:
 
 - registry/version/Git status;
 - audit status;
+- MTF timing audit status, if applicable;
+- version root/isolation status;
 - data evidence type;
 - attribution/change rationale;
 - bar-by-bar replay status when near freeze;

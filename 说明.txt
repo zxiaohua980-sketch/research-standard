@@ -8,7 +8,7 @@
   打开 MIDWAY_RESCUE.md，用 30 分钟自检清单快速定位你在哪个 Stage，然后选对应的 Method（A/B/C/D/E）走具体步骤。
 
   如果想快速查参考：
-  - CHEATSHEET.md —— 十大禁区 + 七层检验 + 常见错误
+  - CHEATSHEET.md —— 十二大禁区 + 七层检验 + 常见错误
   - TEMPLATE_signal_engine.py —— 复制改你的信号逻辑
 
   当前已建立的核心规范：
@@ -17,6 +17,7 @@
   - 参数优化三层分离（OPTIMIZATION_POLICY.md）
   - 环境诊断五维度（REGIME_VALIDATION_STANDARD.md）
   - 版本冻结和前向验证（VERSIONING_AND_FREEZE_POLICY.md）
+  - 多周期未来函数与版本文件夹隔离（MTF_LOOKAHEAD_AND_VERSION_ISOLATION_STANDARD.md）
   - Git 可复现性规范（GIT_AND_REPRODUCIBILITY_STANDARD.md）
 
   需要我帮你启动哪一个？或者有具体的开发问题？

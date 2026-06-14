@@ -86,6 +86,17 @@ caches, local test configs, or machine-specific files as the operator copy folde
   `max_new_orders_per_cycle`;
 - pending-order management: `pending_expire_bars`, `pending_expire_minutes`,
   `cancel_stale_pending=true`, and spread-aware pending price handling;
+- cost-inclusive sizing: `position_sizing_mode=cost_inclusive_risk_cash`,
+  `include_commission_in_risk=true`, `commission_per_lot_round_turn_usd=7.0`,
+  `commission_free_symbols=XAUUSD,BTCUSD`, `include_spread_in_risk=true`,
+  `spread_source`, `include_slippage_in_risk=true`, `slippage_points_entry`,
+  `slippage_points_exit`, `volume_rounding=floor_to_step`, and
+  `max_risk_overshoot_pct=0`;
+- pending-order price policy: `signal_price_basis`, `pending_price_policy`,
+  `adjust_pending_entry_for_spread`, `adjust_sl_for_spread`,
+  `adjust_tp_for_spread`, and `reject_if_adjusted_sl_invalid`;
+- duplicate signal guard: `signal_execution_ledger_path`, `signal_key_fields`,
+  `consume_signal_before_order_send=true`, and `block_duplicate_signal_bar=true`;
 - reconciliation: `reconcile_on_startup`, `reconcile_each_cycle`, `recovery_lookback_days`,
   `history_future_buffer_hours`, `order_confirm_timeout_seconds`,
   `order_confirm_poll_interval_seconds`, `unknown_freeze_new_orders`;
@@ -94,6 +105,56 @@ caches, local test configs, or machine-specific files as the operator copy folde
 
 The account type must be read from MT5 and printed at runtime. Do not infer DEMO/REAL status
 from the EXE name, BAT name, folder name, or config label.
+
+### Cost-Inclusive Position Sizing
+
+Order-capable runtimes must calculate lots from the full cost-inclusive risk denominator:
+
+```text
+lots = risk_cash_per_order / total_risk_cash_per_lot
+
+total_risk_cash_per_lot =
+  entry_to_sl_price_loss_cash_per_lot
+  + commission_cash_per_lot
+  + spread_cost_cash_per_lot
+  + slippage_cost_cash_per_lot
+```
+
+Default commission is USD 7 per lot per closed trade for non-exempt symbols. XAUUSD and
+BTCUSD may be commission-free only when explicitly listed in `commission_free_symbols` or in
+a symbol-specific override. The runtime must log the matched commission rule for each order.
+
+Volume must round down to the broker lot step by default. If minimum volume, spread, slippage,
+commission or adjusted stop distance would exceed configured risk, the order must be rejected
+unless an explicit audited overshoot policy allows it.
+
+### Pending Order Price Policy
+
+Pending order formulas must be declared in config and logged with both raw and adjusted levels.
+Do not hide spread handling in code.
+
+Default conservative policy:
+
+```text
+pending_price_policy = conservative_full_spread
+signal_price_basis   = bid_chart
+
+BUY  pending_entry = raw_entry + spread_price
+BUY  sl            = raw_sl    - spread_price
+BUY  tp            = raw_tp
+
+SELL pending_entry = raw_entry - spread_price
+SELL sl            = raw_sl    + spread_price
+SELL tp            = raw_tp
+```
+
+This policy is intentionally conservative and symmetric. If a runtime instead uses exact MT5
+bid/ask trigger semantics, it must set `pending_price_policy=broker_bidask_exact`, document
+which side triggers each level, and audit formulas against `symbol_info_tick().bid/ask`.
+
+After adjustment, the runtime must validate long SL below entry, short SL above entry,
+broker stops level, minimum pending distance, tick size rounding, and lot-step risk impact.
+Invalid adjusted levels are order blockers.
 
 ## MT5 Portability
 
@@ -163,6 +224,8 @@ Order-capable runtimes must enforce:
 - MT5 `trade_allowed=True`;
 - max position, max volume, and max new orders per cycle gates;
 - unique `magic_number` and `comment_prefix` for every strategy/version/environment;
+- cost-inclusive position sizing that includes entry-to-SL loss, commission, spread and slippage;
+- config-declared pending-order price adjustment for entry/SL/TP;
 - MT5 comment length handling, including broker-side truncation tolerance;
 - signal execution ledger before or at order attempt, so one completed signal bar cannot open
   twice even if the first order closes in the same candle or the runtime restarts;

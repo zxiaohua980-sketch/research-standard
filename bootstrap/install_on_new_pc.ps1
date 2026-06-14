@@ -20,8 +20,8 @@ else {
 
 $RootAgentsSource = Join-Path $ScriptDir "MT5_ROOT_AGENTS.md"
 $RootAgentsTarget = Join-Path $MT5Root "AGENTS.md"
-$SkillSource = Join-Path $RepoRoot ".codex\skills\quant-research"
-$SkillTarget = Join-Path $env:USERPROFILE ".codex\skills\quant-research"
+$SkillsSourceRoot = Join-Path $RepoRoot ".codex\skills"
+$SkillsTargetRoot = Join-Path $env:USERPROFILE ".codex\skills"
 $RegistryFile = Join-Path $RegistryRoot "strategy_registry.yaml"
 
 function Write-Step {
@@ -66,25 +66,37 @@ else {
 }
 
 if (-not $SkipSkillInstall) {
-    if (-not (Test-Path -LiteralPath $SkillSource)) {
-        throw "Missing skill source: $SkillSource"
+    if (-not (Test-Path -LiteralPath $SkillsSourceRoot)) {
+        throw "Missing skills source root: $SkillsSourceRoot"
     }
 
-    $SkillParent = Split-Path -Parent $SkillTarget
-    if (-not (Test-Path -LiteralPath $SkillParent)) {
+    if (-not (Test-Path -LiteralPath $SkillsTargetRoot)) {
         Write-Step "Creating Codex skills directory."
-        New-Item -ItemType Directory -Path $SkillParent | Out-Null
+        New-Item -ItemType Directory -Path $SkillsTargetRoot | Out-Null
     }
 
-    Copy-Item -LiteralPath $SkillSource -Destination $SkillParent -Recurse -Force
-    Write-Step "Installed Codex skill: $SkillTarget"
+    $SkillsTargetRootResolved = [System.IO.Path]::GetFullPath($SkillsTargetRoot)
+    $SkillsTargetPrefix = $SkillsTargetRootResolved.TrimEnd('\') + '\'
+    $SkillDirs = Get-ChildItem -LiteralPath $SkillsSourceRoot -Directory
+    foreach ($SkillDir in $SkillDirs) {
+        $SkillTarget = Join-Path $SkillsTargetRoot $SkillDir.Name
+        $SkillTargetResolved = [System.IO.Path]::GetFullPath($SkillTarget)
+        if (-not $SkillTargetResolved.StartsWith($SkillsTargetPrefix, [System.StringComparison]::OrdinalIgnoreCase)) {
+            throw "Refusing to replace skill outside Codex skills directory: $SkillTargetResolved"
+        }
+        if (Test-Path -LiteralPath $SkillTarget) {
+            Remove-Item -LiteralPath $SkillTarget -Recurse -Force
+        }
+        Copy-Item -LiteralPath $SkillDir.FullName -Destination $SkillsTargetRoot -Recurse -Force
+        Write-Step "Installed Codex skill: $SkillTarget"
 
-    $SkillManifest = Join-Path $SkillTarget "SKILL.md"
-    if (Test-Path -LiteralPath $SkillManifest) {
-        Write-Step "Skill manifest verified: $SkillManifest"
-    }
-    else {
-        throw "Skill install failed: SKILL.md was not found at $SkillManifest"
+        $SkillManifest = Join-Path $SkillTarget "SKILL.md"
+        if (Test-Path -LiteralPath $SkillManifest) {
+            Write-Step "Skill manifest verified: $SkillManifest"
+        }
+        else {
+            throw "Skill install failed: SKILL.md was not found at $SkillManifest"
+        }
     }
 }
 else {

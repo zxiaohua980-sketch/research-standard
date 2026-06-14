@@ -19,6 +19,22 @@
 
 ---
 
+## 横向强制模式：Strict Audit Enforcement Mode
+
+当任务是审计、查未来函数、修复普通回测与逐根回测差异、加固、批准候选、MTF/pivot/swing/execution 检查、重放一致性检查或 runtime safety 检查时，三阶段流程必须临时切入 `STRICT_AUDIT_ENFORCEMENT_STANDARD.md`：
+
+- 只允许最小安全补丁，不允许顺手优化 PF、胜率、RR、交易数量、参数或策略逻辑；
+- 必须检查全局时间模型：`bar_open_time <= feature_available_at <= signal_time <= execution_time`；
+- MT5 OHLC 的 `bar_close_time` 按下一根 bar 的 open time 理解；
+- pivot/swing/structure 必须记录 detect/confirm/signal 时间顺序；
+- 多周期特征必须证明 `feature_available_at <= decision_time/signal_time`；
+- 逐根/增量 replay 与 batch 回测不一致时，默认视为 `REPAINTING_OR_LOOKAHEAD_FAIL`，除非能用保守执行/成本/gap 规则逐项解释；
+- 修复 safety 缺陷后，缺陷引擎产生的所有 downstream metrics 作废并重新生成。
+
+该模式不替代 Phase 1/2/3，而是审计任务的执行方式：先证明系统没有未来函数、时间错位、重绘、跨版本污染和执行模型错误，再继续探索、迭代或打包。
+
+---
+
 ## Phase 1: 快速开发测试阶段
 
 ### 目标
@@ -66,11 +82,13 @@ not forward-live
 
 ### 致命审计
 
-Phase 1 不要求完整正式审计报告，但每次快测前必须检查：
+Phase 1 不要求完整正式审计报告，但每次快测前必须按 `STRICT_AUDIT_ENFORCEMENT_STANDARD.md` 做致命审计快检：
 
 - 是否有未来函数或数据泄漏；
 - 如果使用多周期，是否把未完成的高周期 bar 提前合并进低周期决策；
 - bar-close 信号是否在下一根或下一可成交报价执行；
+- 全局时间模型 `bar_open_time <= feature_available_at <= signal_time <= execution_time` 是否成立；
+- pivot/swing/structure 是否在确认完成后才允许出信号；
 - SL/TP 方向是否合法；
 - 同一根 OHLC 同时触及 SL/TP 时是否使用预声明规则；
 - 费用、点差、滑点是否至少有保守估计；
@@ -185,6 +203,7 @@ next_action:
 固定候选逻辑
 建立独立 version_root
 完整执行审计
+Strict Audit Enforcement Mode 修复所有 blocking safety defect
 多周期时间可用性审计（如适用）
 常规回测
 盈亏比平台检查
@@ -254,7 +273,8 @@ Phase 2 末端、冻结候选前，必须执行 bar-by-bar replay。普通批量
 - 交易数量一致或差异可解释；
 - entry/exit 时间差异可解释；
 - PnL 差异在成本、滑点或 gap 模型范围内；
-- 无未来函数、无未完成高周期 bar 泄漏、无同 bar 理想成交、无重复开仓、无状态漂移；
+- 无未来函数、无未完成高周期 bar 泄漏、无 pivot/swing/structure 未确认即使用、无同 bar 理想成交、无重复开仓、无状态漂移；
+- batch vs incremental replay 无无法解释的 `REPAINTING_OR_LOOKAHEAD_FAIL`；
 - 输出 `bar_by_bar_replay_report.md`。
 
 ### 版本文件夹隔离关口
@@ -293,7 +313,7 @@ freeze_candidate
 
 ### 目标
 
-把冻结候选打包成可复制、可审计、可运行的 Windows EXE，并验证 dry-run/demo runtime 的安全性。
+把冻结候选打包成可复制、可审计、可运行的 Windows EXE，并验证 dry-run/demo runtime 的安全性。具体打包规则必须遵循 `MT5_RUNTIME_PACKAGING_STANDARD.md`。
 
 ### 进入条件
 
@@ -302,6 +322,7 @@ freeze_candidate
 - 参数冻结；
 - 成本和成交模型冻结；
 - 逐根回测通过；
+- Strict Audit Enforcement Mode 无 blocking FAIL；
 - MTF 时间可用性审计通过（如适用）；
 - 版本文件夹隔离检查通过；
 - Git commit 和 config hash 明确；
@@ -321,27 +342,41 @@ live_trade: 禁止，除非未来另行建立真实账户部署制度
 - `allow_live_trade=false`；
 - demo 下单必须显式授权；
 - `kill_switch` 可阻断；
-- `max_positions` 和 `max_orders_per_cycle` 生效；
+- `risk_cash_per_order`、最大手数、最大持仓、单轮最大开仓数必须从 `config.ini` 读取；
 - `magic_number` 和 `comment_prefix` 每个策略/版本/环境唯一；
-- 信号执行 ledger 防止同一根信号重复开仓；
-- order intent journal 在下单前写入；
+- 信号执行 ledger 防止同一根信号重复开仓，即使该单在同一根 K 线内被平仓或程序重启；
+- order intent journal 在下单前原子写入；
 - 启动时先 reconciliation，再扫描新信号；
 - EXE 不依赖开发机绝对路径；
 - `config.ini` 外置；
-- logs/tmp/cache 在 EXE 目录下相对路径。
+- `refresh_seconds`、挂单有效期、对账窗口、确认轮询、日志目录、数据缓存目录必须外置配置；
+- 运行时必须用 MT5 API 获取本机终端数据，默认维护最近 3000 根已完成 K 线缓存；
+- logs 和 data_cache 必须在 EXE 目录下相对路径；
+- 直接打开 EXE 必须有动态控制台输出，不能只依赖 BAT 或隐藏日志。
 
 ### 必须产物
 
-- EXE；
-- `config.ini`；
-- `run_status.bat`；
-- `run_dry_run.bat`；
-- `run_demo.bat`；
-- `README_RUNTIME.md`；
-- `hash_manifest.txt`；
-- `runtime_audit_report.md`；
-- demo/dry-run smoke logs；
-- clean portable folder。
+- 可直接双击运行的 EXE；
+- EXE 同目录 `config.ini`；
+- 空 `logs\` 目录；
+- 空 `data_cache\` 目录；
+- runtime/package audit 报告；
+- source preflight 证据；
+- EXE SHA256 和 config SHA256；
+- portable copy smoke 证据；
+- demo/dry-run smoke 证据（如已授权运行）。
+
+BAT 文件只允许作为兼容包装，不是 Phase 3 的必需产物，也不能替代直接 EXE 验收。
+
+### 打包验收顺序
+
+1. 源码版本先用最终 `config.ini` 跑通一轮，确认能连接 MT5、输出身份、创建日志/缓存、完成对账和扫描；
+2. audit/preflight 无 FAIL；
+3. 才允许 PyInstaller 打包；
+4. 打包后必须直接运行 EXE；
+5. 把 portable 文件夹复制到另一个临时路径，再直接运行 EXE；
+6. 确认输出只写入复制后的 EXE 目录；
+7. 交付前清空 portable 目录中的历史日志和数据缓存，除非用户明确要求保留诊断证据。
 
 ### Phase 3 结论
 

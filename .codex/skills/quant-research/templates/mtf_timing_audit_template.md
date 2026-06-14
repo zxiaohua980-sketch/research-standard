@@ -8,6 +8,7 @@
 - config_hash:
 - audit_status: PASS | FAIL | WARN_ONLY
 - evidence_grade: candidate_timing_validation
+- strict_audit_mode: yes/no
 
 ## Timeframes
 
@@ -19,9 +20,28 @@
 
 | assertion | rows_checked | failures | status |
 |-----------|--------------|----------|--------|
+| bar_open_time <= feature_available_at <= signal_time <= execution_time | | | PASS/FAIL |
+| MT5 bar_close_time = next_bar_open_time | | | PASS/FAIL |
 | feature_available_at <= decision_time | | | PASS/FAIL |
 | htf_bar_close_time <= decision_time | | | PASS/FAIL |
 | no incomplete HTF bar used | | | PASS/FAIL |
+
+## Pivot / Swing / Structure Integrity
+
+Required when ZigZag, pivot, swing, fractal, divergence, market structure, range breakout or
+liquidity-sweep confirmation is used.
+
+```text
+pivot_iloc <= pivot_detect_iloc <= confirm_iloc <= signal_iloc <= current_iloc
+```
+
+| field/check | present | violations | status |
+|-------------|---------|------------|--------|
+| pivot_iloc / pivot_time | | | PASS/FAIL/NA |
+| pivot_detect_iloc / pivot_detect_time | | | PASS/FAIL/NA |
+| confirm_iloc / confirm_time | | | PASS/FAIL/NA |
+| signal_iloc / signal_time | | | PASS/FAIL/NA |
+| ordering assertion | | | PASS/FAIL/NA |
 
 ## Boundary Samples
 

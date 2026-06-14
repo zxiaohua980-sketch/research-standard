@@ -7,6 +7,11 @@ breakeven/trailing rules, position sizing, and any logic change derived from tra
 attribution. It applies across Stage 2, Stage 5, Stage 6, Stage 7, Stage 11, Stage 12 and
 Stage 13.
 
+When the immediate task is audit, lookahead repair, replay-difference investigation,
+execution hardening or candidate approval, also apply `STRICT_AUDIT_ENFORCEMENT_STANDARD.md`.
+In that mode, only minimal safety patches are allowed; do not combine execution fixes with
+profit optimization, parameter changes or strategy-logic changes.
+
 An exit or risk rule is part of the strategy, not a harmless implementation detail. Changing
 an SL, TP, trailing rule, breakeven trigger, timeout, sizing rule, execution price model, or
 cost model creates a new strategy version or experiment branch.
@@ -17,6 +22,16 @@ cost model creates a new strategy version or experiment branch.
 
 Before a baseline backtest is considered auditable, the strategy must declare exactly when a
 decision becomes known and at what price an order could be executed.
+
+The global time model must be explicit:
+
+```text
+bar_open_time <= feature_available_at <= signal_time <= execution_time
+```
+
+For MT5 OHLC data, `bar_close_time` is the next bar's open time. A bar-close signal is not
+known until that close time and cannot execute on the same close unless ordered tick/event
+evidence proves it.
 
 If the strategy uses multiple timeframes, resampling, or higher-timeframe filters, the
 decision model must also declare the source bar close time and `available_at` time for each
@@ -111,6 +126,10 @@ No result using SL/TP may proceed unless the audit explicitly records PASS/FAIL 
     every signal and store source higher-timeframe close/available times in the output.
 12. Phase 2+ outputs and mutable inputs stay inside the active `versions/<version>/` folder,
     except immutable hash-declared market data snapshots.
+13. If pivots/swings/structures are used, `pivot_detect_time <= confirm_time <= signal_time`
+    is recorded and enforced.
+14. Any batch-vs-incremental or ordinary-vs-bar-by-bar mismatch is classified before metrics
+    are trusted; unexplained mismatch is `REPAINTING_OR_LOOKAHEAD_FAIL`.
 
 Any failed item means the reported metrics are not decision-grade.
 

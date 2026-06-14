@@ -46,9 +46,9 @@
 ### 1. CLAUDE.md
 **Claude Code / Codex 策略研究最高优先级指令**
 
-这是 Claude Code 执行任何策略任务时的最高约束。包含十二大禁区和每次接收任务时的必做检查表。
+这是 Claude Code 执行任何策略任务时的最高约束。包含十三大禁区和每次接收任务时的必做检查表。
 
-**十二大禁区**：
+**十三大禁区**：
 1. 禁止在没有执行审计的情况下相信回测结果
 2. 禁止在没有 Trade Attribution 的情况下新增 filter
 3. 禁止用全样本选择参数
@@ -61,6 +61,7 @@
 10. 每一次策略规则变化必须开启新版本或新分支
 11. 禁止未通过多周期时间可用性审计的 MTF 回测进入正式结论
 12. 禁止跨版本读取回测数据、报告、缓存或记录
+13. 禁止在审计任务中顺手优化或改变策略逻辑
 
 **何时使用**：Claude Code 接到每个策略任务时必读。
 
@@ -88,6 +89,42 @@
 - Stage 13: Portfolio / Deployment（组合与部署）
 
 **何时使用**：开发新策略时，按照这个流程逐个阶段完成。
+
+---
+
+### 2A. MT5_RUNTIME_PACKAGING_STANDARD.md
+**MT5 Runtime / EXE 打包规范（Phase 3）**
+
+规定冻结候选进入 dry-run/demo runtime 打包时的硬门槛：直接 EXE 启动、外置 `config.ini`、源码预检、PyInstaller 前后 audit、3000 根已完成 K 线缓存、运行日志、对账日志、订单 intent、持仓/挂单快照、DEMO 安全门、REAL 硬拒绝和换电脑运行验证。
+
+**关键内容**：
+- 什么时候必须触发打包规范
+- 直接双击 EXE 的操作员合同
+- `config.ini` 必须外置的字段
+- MT5 API 数据获取和 3000K 缓存
+- 订单、持仓、挂单、历史成交对账
+- source preflight / build hook / package audit
+- portable 文件夹交付要求
+
+**何时使用**：任何 EXE 打包、MT5 自动交易、模拟下单、订单监控、持仓管理、换电脑运行任务时必读。
+
+---
+
+### 2B. STRICT_AUDIT_ENFORCEMENT_STANDARD.md
+**严格审计执行规范（Audit-only / Minimal Patch）**
+
+把未来函数、重绘、多周期时间泄漏、pivot/swing 确认顺序、执行时点、逐根 replay 差异、survivorship 和跨版本污染作为硬审计对象。进入该模式时，只允许最小安全补丁，不允许顺手优化策略、参数、PF、胜率、RR 或交易数量。
+
+**关键内容**：
+- 全局时间模型：`bar_open_time <= feature_available_at <= signal_time <= execution_time`
+- MT5 `bar_close_time = next_bar_open_time`
+- lookahead、MTF leakage、repainting、same-bar execution 的 fail-fast 类别
+- pivot/swing/structure 的 detect/confirm/signal 顺序
+- batch vs incremental replay 一致性
+- 一个版本一个文件夹和数据/缓存隔离
+- 审计报告必须输出 `AUDIT_STATUS`、问题列表、文件/函数位置、最小补丁和 replay 结果
+
+**何时使用**：任何审计、修复未来函数、解释逐根回测差异、候选批准、MTF/pivot/execution safety hardening 或 runtime safety 审查时必读。
 
 ---
 
@@ -247,12 +284,21 @@
 
 ---
 
+### 14. BROKER_COST_MODEL_STANDARD.md
+**默认经纪商成本模型**
+
+定义没有 broker-specific 证据时的默认 spread/commission/slippage 处理。成本模型属于策略规则和审计对象，不能在看结果后随意调整。
+
+**何时使用**：任何涉及手续费、点差、滑点、swap、成本压力测试或跨品种回测结论时必读。
+
+---
+
 ## 快速导航
 
 ### 如果你是...
 
 **新手研究员**：
-1. 先读 CLAUDE.md（了解十二大禁区）
+1. 先读 CLAUDE.md（了解十三大禁区）
 2. 再读 GIT_AND_REPRODUCIBILITY_STANDARD.md（了解 Git 规范）
 3. 然后读 RESEARCH_WORKFLOW.md（了解完整流程）
 
@@ -263,6 +309,10 @@
 
 **要做 Trade Attribution**：
 - 必读 TRADE_ATTRIBUTION_STANDARD.md（最重要的文档）
+
+**要审计未来函数、逐根差异或多周期泄漏**：
+- 必读 STRICT_AUDIT_ENFORCEMENT_STANDARD.md（只审计，不优化）
+- 再读 MTF_LOOKAHEAD_AND_VERSION_ISOLATION_STANDARD.md（如果涉及多周期/结构确认）
 
 **要做参数优化**：
 - 必读 OPTIMIZATION_POLICY.md（避免常见错误）
@@ -288,6 +338,7 @@
 | **Look-Ahead Bias** | 在回测中使用了未来数据的错误，必须在 Stage 2 Execution Audit 中检查 | 每个新回测、新数据源时检查 |
 | **MTF Timing Audit** | 证明高周期特征在低周期决策时已经完成且可见 | 任何多周期或重采样策略 |
 | **Version Root** | `versions/<version>/` 独立目录，隔离本版本代码、配置、输出、报告和缓存 | Phase 2+ 每个候选版本 |
+| **Strict Audit Enforcement Mode** | 审计-only 模式，只允许最小安全补丁，禁止与性能优化混合 | 查未来函数、replay 差异、MTF/pivot/execution hardening |
 | **Overfitting** | 参数过度优化到特定历史数据，导致样本外性能急剧下降 | Stage 7 优化时严防，Stage 8 WF 评估 |
 
 ---
@@ -314,5 +365,5 @@
 ---
 
 **创建时间**：2025-06-01
-**最后更新**：2026-06-05
+**最后更新**：2026-06-14
 **维护者**：Claude Code, Quantitative Research Team

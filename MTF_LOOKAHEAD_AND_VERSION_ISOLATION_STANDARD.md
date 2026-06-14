@@ -12,6 +12,33 @@ This standard fixes two blocking risks in MT5/FX research:
 For Phase 2+ work, either risk makes the result non-decision-grade. A candidate cannot be
 frozen, handed to runtime packaging, or used for OOS/forward claims until both gates pass.
 
+When the task is explicitly audit, hardening, lookahead repair, replay-difference
+investigation, or candidate approval, also follow `STRICT_AUDIT_ENFORCEMENT_STANDARD.md`.
+That mode allows only minimal safety patches and forbids performance optimization or
+strategy-logic changes inside the audit patch.
+
+---
+
+## 0. Global Time Model
+
+Every MTF, replay or execution audit must enforce:
+
+```text
+bar_open_time <= feature_available_at <= signal_time <= execution_time
+```
+
+For MT5 OHLC data:
+
+```text
+bar_close_time = next_bar_open_time
+```
+
+The current unfinished bar is not closed. A signal generated from a completed bar can execute
+no earlier than the next executable quote/bar unless ordered tick/event data proves otherwise.
+
+If a project uses `available_at` as the field name, treat it as `feature_available_at` and
+preserve that value in signals/trades/audit rows.
+
 ---
 
 ## 1. Multi-Timeframe Timing Contract
@@ -26,7 +53,7 @@ Required fields or equivalent metadata:
 | `timeframe` | Source bar timeframe, for example `M15`, `M30`, `H1`, `H4`, `D1` |
 | `bar_open_time` | Time when the source bar starts |
 | `bar_close_time` | Time when the source bar is complete |
-| `available_at` | Earliest time the feature can be used by the decision engine |
+| `feature_available_at` / `available_at` | Earliest time the feature can be used by the decision engine |
 | `source_file_hash` | Hash of the raw/source file or immutable snapshot |
 | `timezone` | Broker/server timezone or normalized UTC policy |
 
@@ -81,6 +108,33 @@ Allowed pattern:
 
 ---
 
+## 2A. Pivot / Swing / Structure Integrity
+
+Any MTF strategy that uses ZigZag, pivot, swing, fractal, divergence, market structure,
+range breakout or liquidity-sweep confirmation must prove the structure was detectable before
+the signal:
+
+```text
+pivot_iloc <= pivot_detect_iloc <= confirm_iloc <= signal_iloc <= current_iloc
+pivot_time <= pivot_detect_time <= confirm_time <= signal_time <= current_time
+```
+
+Signals must carry or be traceable to:
+
+- `pivot_iloc`
+- `pivot_time`
+- `pivot_detect_iloc`
+- `pivot_detect_time`
+- `confirm_iloc`
+- `confirm_time`
+- `signal_iloc`
+- `signal_time`
+
+If these fields are missing, record the status as `structure_timing_unverified / not
+decision-grade`. If ordering is violated, fail the audit as `LOOKAHEAD_LEAK_DETECTED`.
+
+---
+
 ## 3. MTF Audit Requirements
 
 Any Phase 2+ strategy using more than one timeframe must produce `mtf_timing_audit.md` or an
@@ -96,6 +150,8 @@ Required checks:
 | Batch feature values match incremental/bar-by-bar feature values | yes |
 | No forward/nearest/bfill/negative-shift pattern is unexplained | yes |
 | Signal output stores source HTF close/available time | yes |
+| Global time model `bar_open_time <= feature_available_at <= signal_time <= execution_time` passes | yes |
+| Pivot/swing/structure timing metadata is present and ordered, if applicable | yes |
 | Timezone/session conversion is documented | yes |
 
 If the audit finds a lookahead defect, all downstream metrics generated from that engine are

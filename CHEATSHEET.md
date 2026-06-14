@@ -9,7 +9,7 @@
 
 ---
 
-## 🚫 十二大禁区（必背）
+## 🚫 十三大禁区（必背）
 
 1. ❌ 没审计就信回测结果 → `先读 Stage 2`
 2. ❌ 没归因就加 filter → `先读 TRADE_ATTRIBUTION_STANDARD.md`
@@ -23,6 +23,40 @@
 10. ❌ 不开新版本就改规则 → `改规则 = 新版本 = 新 tag`
 11. ❌ MTF 未审计就信回测 → `先读 MTF_LOOKAHEAD_AND_VERSION_ISOLATION_STANDARD.md`
 12. ❌ 跨版本读取旧输出 → `一个版本，一个文件夹`
+13. ❌ 审计时顺手优化 → `先读 STRICT_AUDIT_ENFORCEMENT_STANDARD.md，只修安全缺陷`
+
+---
+
+## 🧯 Strict Audit Enforcement Mode（查错时必用）
+
+触发：未来函数审计、MTF 泄漏、普通回测 vs 逐根回测差异、pivot/swing/structure 确认顺序、execution timing、runtime safety、候选批准。
+
+只允许：
+- 修 lookahead/leakage；
+- 修时间对齐；
+- 加 `feature_available_at` / `signal_time` / `execution_time` 元数据；
+- 加断言、replay 检查和版本路径守卫；
+- 输出审计报告。
+
+禁止：
+- 改入场/出场逻辑；
+- 改指标公式；
+- 调参数、RR、PF、胜率、交易数量；
+- 把安全修复后的指标说成“优化提升”。
+
+核心时间模型：
+
+```text
+bar_open_time <= feature_available_at <= signal_time <= execution_time
+MT5 bar_close_time = next_bar_open_time
+```
+
+硬失败标记：
+- `LOOKAHEAD_LEAK_DETECTED`
+- `MULTI_TIMEFRAME_LOOKAHEAD_DETECTED`
+- `REPAINTING_OR_LOOKAHEAD_FAIL`
+
+输出必须有：`AUDIT_STATUS`、问题列表、文件/函数位置、最小补丁、batch-vs-incremental replay 结果。
 
 ---
 
@@ -142,6 +176,7 @@ README.md              ← 项目文档
 
 ```
 Stage 2: execution_audit.md
+Strict audit: strict_audit_enforcement_report.md（查未来函数/重放差异/safety hardening）
 Stage 2 MTF: mtf_timing_audit.md（多周期必需）
 Phase 2+: version_isolation_check.json
 Stage 3: event_study_report.md
@@ -154,7 +189,22 @@ Stage 9: regime_validation.md
 Stage 10: temporal_validation.md
 Stage 11: version.json + git tag
 Stage 12: forward_live_state.json
+Phase 3: source_preflight_last.json + runtime_audit_report.md + EXE/config hashes
 ```
+
+### Phase 3 EXE 打包速查
+
+- [ ] 先读 `MT5_RUNTIME_PACKAGING_STANDARD.md`
+- [ ] 源码版用最终 `config.ini` 跑通一轮
+- [ ] audit/preflight 无 FAIL
+- [ ] 再 PyInstaller 打包
+- [ ] 直接双击 EXE 能运行，不依赖 BAT
+- [ ] 控制台有动态扫描/对账输出
+- [ ] `config.ini` 外置 `refresh_seconds`、每单投入金额、最大持仓/手数、挂单时长
+- [ ] MT5 API 获取本机数据，缓存最近 3000 根已完成 K 线
+- [ ] 写入 runtime/error/reconciliation/order/position 日志
+- [ ] 换路径复制后 EXE 仍能运行
+- [ ] 交付目录只保留 EXE、`config.ini`、空 `logs\`、空 `data_cache\`
 
 ---
 
@@ -181,6 +231,7 @@ Stage 12: forward_live_state.json
 | 全样本优化 | Sharpe 很高但 OOS 崩坏 | 用 IS/OOS-Dev/OOS-Final/Forward 重新设计，并登记已消费数据 |
 | 前视偏差 | backtest Sharpe > 2.0 | 检查是否用了未来数据 |
 | MTF 未来函数 | 普通回测和逐根回测差距巨大 | 检查高周期 `available_at <= decision_time` |
+| pivot/swing 重绘 | 成品回测好、逐根消失 | 检查 `pivot_detect <= confirm <= signal` |
 | 跨版本读错文件 | 新版本结果解释不清 | 检查 `versions/<version>/` 和路径守卫 |
 | 样本太小加 filter | 优化了但前向崩盘 | 要求 >= 30 笔样本 |
 | 环境不好删掉 | Sharpe 漂亮但现实失效 | 不要删，这是市场真相 |
@@ -202,6 +253,7 @@ Stage 12: forward_live_state.json
 | **版本清晰** | commit hash 是真理 |
 | **目录隔离** | 一个版本，一个文件夹 |
 | **MTF 严格** | 高周期必须先完成再可用 |
+| **审计纯粹** | 查错时只修安全缺陷，不顺手优化 |
 | **冻结严格** | forward 中一个标点都不改 |
 | **样本至上** | < 30 笔 = 无效 |
 | **时间验证** | 前向是最后的试金石 |
@@ -213,7 +265,7 @@ Stage 12: forward_live_state.json
 ```
 想开发新策略
 ├─ 先读: README.md (1 min)
-├─ 再读: CLAUDE.md 十二大禁区 (3 min)
+├─ 再读: CLAUDE.md 十三大禁区 (3 min)
 ├─ 建立: STRATEGY_DEVELOPMENT_STANDARD.md
 └─ 开发: RESEARCH_WORKFLOW.md Stage 1-4
 
@@ -247,6 +299,7 @@ Stage 12: forward_live_state.json
 
 怕做错
 ├─ 读: CLAUDE.md
+├─ 审计/查错: STRICT_AUDIT_ENFORCEMENT_STANDARD.md
 ├─ 查: CHEATSHEET.md (本文件)
 └─ 问: 规范文档是你的律师
 ```
@@ -311,4 +364,4 @@ Stage 12: forward_live_state.json
 
 **打印这个文件，贴在你的电脑旁边。** 🖨️
 
-每当想偷懒时，看一眼十二大禁区，冷静下来。
+每当想偷懒时，看一眼十三大禁区，冷静下来。

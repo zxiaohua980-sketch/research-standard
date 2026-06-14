@@ -2,6 +2,15 @@
 
 Lookahead checks answer one question: was every feature, filter, session label, execution price, and management decision knowable at the declared decision time?
 
+Strict audit uses the global time model:
+
+```text
+bar_open_time <= feature_available_at <= signal_time <= execution_time
+```
+
+For MT5 OHLC, treat `bar_close_time` as the next bar's open time. A completed-bar signal may
+execute only on the next executable quote/bar unless ordered tick/event data proves otherwise.
+
 ## Rolling and shift rules
 
 - Rolling indicators used on bar `t` must not include bar `t` unless the signal is explicitly evaluated after bar close.
@@ -37,11 +46,18 @@ Columns with names such as `future_high`, `future_low`, `next_close`, `max_forwa
 ZigZag, swing high/low, pivot, liquidity sweep, and structure break features often require delayed confirmation. Record:
 
 - the raw price event time;
+- the pivot detect time;
 - the confirmation time;
 - the earliest signal time;
 - whether the strategy uses the raw event or the confirmed event.
 
 Using a confirmed swing as if it was known at the swing bar is lookahead.
+
+For pivot/structure signals, enforce:
+
+```text
+pivot_iloc <= pivot_detect_iloc <= confirm_iloc <= signal_iloc <= current_iloc
+```
 
 ## Session statistics
 

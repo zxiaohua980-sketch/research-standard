@@ -11,6 +11,12 @@ optimization, risk rule, forward validation, or deployment must follow:
   in-sample, OOS, holdout, walk-forward or forward-live
 - `{{RESEARCH_STANDARD_ROOT}}\EXIT_RISK_AND_LOGIC_REFINEMENT_STANDARD.md` when execution,
   stops, targets, sizing, exits, or live safeguards are involved
+- `{{RESEARCH_STANDARD_ROOT}}\STRICT_AUDIT_ENFORCEMENT_STANDARD.md` when the task is audit,
+  lookahead repair, replay-difference investigation, MTF/pivot/execution hardening,
+  candidate approval, or runtime safety review
+- `{{RESEARCH_STANDARD_ROOT}}\MT5_RUNTIME_PACKAGING_STANDARD.md` when MT5 runtime packaging,
+  EXE builds, dry-run/demo order execution, order monitoring, position management, or
+  portable cross-computer operation is involved
 
 Before strategy work, query `{{REGISTRY_FILE}}`, identify the research stage and
 freeze/forward status, and enforce all gates from the canonical policy. This file is an

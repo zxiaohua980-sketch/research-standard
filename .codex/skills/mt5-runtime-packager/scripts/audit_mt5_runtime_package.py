@@ -268,6 +268,35 @@ def main() -> int:
             "read-only scanner defaults are locked" if not missing else "missing " + ", ".join(missing),
         )
 
+    runtime_smoke_keys = [
+        "run_mt5_smoke_on_build",
+        "expected_account_server",
+        "expected_login",
+        "print_account_magic_snapshot",
+        "write_account_magic_snapshot",
+        "require_trade_allowed_for_orders",
+        "require_zero_magic_positions_before_smoke",
+        "require_zero_magic_orders_before_smoke",
+    ]
+    missing_runtime_smoke = [key for key in runtime_smoke_keys if not config_has_key(config_text, key)]
+    smoke_on_build = (config_value(config_text, "run_mt5_smoke_on_build") or "false").lower() == "true"
+    result(
+        rows,
+        "PASS" if not smoke_on_build else "FAIL",
+        "config_does_not_auto_smoke_mt5_on_build",
+        "offline packaging must not open MT5 by default",
+    )
+    result(
+        rows,
+        "PASS" if not missing_runtime_smoke else "WARN",
+        "runtime_smoke_config_visible",
+        (
+            "runtime smoke/account snapshot controls are config-visible"
+            if not missing_runtime_smoke
+            else "missing " + ", ".join(missing_runtime_smoke)
+        ),
+    )
+
     real_reject_markers = ["LIVE ACCOUNT", "TRADE_MODE_REAL", "trade_mode == 2", "trade_mode==2"]
     demo_only_markers = ["TRADE_MODE_DEMO", "trade_mode == 0", "trade_mode==0", "0=DEMO"]
     result(
@@ -278,6 +307,18 @@ def main() -> int:
     )
     can_send_orders = "order_send" in executor_text
     lower_executor = executor_text.lower()
+    build_opens_mt5 = (
+        "mt5.initialize" in build_text
+        or "MetaTrader5" in build_text
+        or "terminal64.exe" in build_text.lower()
+        or "terminal.exe" in build_text.lower()
+    )
+    result(
+        rows,
+        "PASS" if not build_opens_mt5 else "FAIL",
+        "offline_build_does_not_open_mt5",
+        "build/static preflight must not initialize or open MT5",
+    )
     result(
         rows,
         "PASS" if (
@@ -308,6 +349,30 @@ def main() -> int:
         ) else "WARN",
         "strategy_runtime_identity_config",
         "config should identify strategy_id, runtime_id, and environment_id for audit isolation",
+    )
+    has_account_snapshot_path = (
+        contains_any(
+            executor_text,
+            [
+                "mt5_account_state_snapshot",
+                "account_state_snapshot",
+                "format_mt5_account_state_lines",
+                "mt5_account_state_blockers",
+            ],
+        )
+        or (
+            "account_info" in executor_text
+            and "terminal_info" in executor_text
+            and "positions_get" in executor_text
+            and "orders_get" in executor_text
+            and "trade_allowed" in executor_text
+        )
+    )
+    result(
+        rows,
+        "PASS" if (not can_send_orders or has_account_snapshot_path) else "FAIL",
+        "runtime_account_magic_snapshot_path",
+        "order-capable runtime should print/log account, trade_allowed, magic positions and magic pending orders when intentionally run",
     )
     cost_risk_keys = [
         "position_sizing_mode",

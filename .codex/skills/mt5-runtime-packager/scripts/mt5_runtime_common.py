@@ -260,6 +260,196 @@ def magic_orders(mt5: Any, magic: int, symbol: str | None = None) -> list[Any]:
     return [o for o in (orders or []) if int(getattr(o, "magic", 0)) == int(magic)]
 
 
+def trade_mode_label(trade_mode: int | None) -> str:
+    """Return a stable label for MT5 account trade_mode values."""
+    if trade_mode == TRADE_MODE_DEMO:
+        return "DEMO"
+    if trade_mode == TRADE_MODE_CONTEST:
+        return "CONTEST"
+    if trade_mode == TRADE_MODE_REAL:
+        return "REAL"
+    return f"UNKNOWN({trade_mode})"
+
+
+def _mt5_fields(item: Any, fields: tuple[str, ...]) -> dict[str, Any]:
+    """Extract serializable public fields from MT5 namedtuple-like objects."""
+    return {field: getattr(item, field, None) for field in fields}
+
+
+def mt5_account_state_snapshot(
+    mt5: Any,
+    magic: int,
+    symbol: str | None = None,
+    include_details: bool = True,
+) -> dict[str, Any]:
+    """Collect an account/magic snapshot after the caller has initialized MT5.
+
+    This helper is deliberately side-effect light:
+
+    - it does not call ``mt5.initialize()``;
+    - it does not open the terminal;
+    - it does not send, modify, or close orders.
+
+    Use it inside source-run preflight, final EXE smoke, or immediately before
+    order-enabled runtime logic. Build/package scripts should only statically
+    verify that this code path exists unless the user explicitly requested a
+    live MT5 smoke test.
+    """
+    errors: list[str] = []
+    account = None
+    terminal = None
+    positions: list[Any] = []
+    orders: list[Any] = []
+
+    try:
+        account = mt5.account_info()
+    except Exception as exc:  # pragma: no cover - depends on external MT5 state
+        errors.append(f"account_info failed: {exc}")
+
+    try:
+        terminal = mt5.terminal_info()
+    except Exception as exc:  # pragma: no cover - depends on external MT5 state
+        errors.append(f"terminal_info failed: {exc}")
+
+    try:
+        positions = magic_positions(mt5, magic, symbol)
+    except Exception as exc:  # pragma: no cover - depends on external MT5 state
+        errors.append(f"positions_get failed: {exc}")
+
+    try:
+        orders = magic_orders(mt5, magic, symbol)
+    except Exception as exc:  # pragma: no cover - depends on external MT5 state
+        errors.append(f"orders_get failed: {exc}")
+
+    trade_mode_raw = getattr(account, "trade_mode", None) if account is not None else None
+    trade_mode = int(trade_mode_raw) if trade_mode_raw is not None else None
+    account_trade_allowed = bool(getattr(account, "trade_allowed", False)) if account is not None else False
+    terminal_trade_allowed = (
+        bool(getattr(terminal, "trade_allowed", False)) if terminal is not None else False
+    )
+    effective_trade_allowed = account_trade_allowed and terminal_trade_allowed
+
+    snapshot: dict[str, Any] = {
+        "checked_at_utc": utc_now(),
+        "magic": int(magic),
+        "symbol_filter": symbol,
+        "account_login": getattr(account, "login", None) if account is not None else None,
+        "account_server": getattr(account, "server", None) if account is not None else None,
+        "account_name": getattr(account, "name", None) if account is not None else None,
+        "trade_mode": trade_mode,
+        "trade_mode_label": trade_mode_label(trade_mode),
+        "account_trade_allowed": account_trade_allowed,
+        "terminal_trade_allowed": terminal_trade_allowed,
+        "trade_allowed": effective_trade_allowed,
+        "terminal_connected": terminal is not None,
+        "magic_positions_count": len(positions),
+        "magic_orders_count": len(orders),
+        "errors": errors,
+    }
+
+    last_error = None
+    try:
+        last_error = mt5.last_error()
+    except Exception:  # pragma: no cover - depends on external MT5 module
+        last_error = None
+    if last_error:
+        snapshot["last_error"] = last_error
+
+    if include_details:
+        position_fields = (
+            "ticket",
+            "time",
+            "time_msc",
+            "symbol",
+            "type",
+            "volume",
+            "price_open",
+            "sl",
+            "tp",
+            "magic",
+            "comment",
+        )
+        order_fields = (
+            "ticket",
+            "time_setup",
+            "time_setup_msc",
+            "symbol",
+            "type",
+            "volume_initial",
+            "volume_current",
+            "price_open",
+            "sl",
+            "tp",
+            "magic",
+            "comment",
+        )
+        snapshot["positions"] = [_mt5_fields(item, position_fields) for item in positions]
+        snapshot["orders"] = [_mt5_fields(item, order_fields) for item in orders]
+
+    return snapshot
+
+
+def format_mt5_account_state_lines(snapshot: dict[str, Any]) -> list[str]:
+    """Format the short human-readable status block used in runtime logs."""
+    account = snapshot.get("account_server") or "UNKNOWN"
+    magic = snapshot.get("magic")
+    return [
+        f"当前账户：{account}",
+        f"trade_allowed={bool(snapshot.get('trade_allowed', False))}",
+        f"magic {magic} 持仓：{int(snapshot.get('magic_positions_count', 0))}",
+        f"magic {magic} 挂单：{int(snapshot.get('magic_orders_count', 0))}",
+    ]
+
+
+def mt5_account_state_blockers(
+    snapshot: dict[str, Any],
+    expected_account_server: str | None = None,
+    expected_login: int | None = None,
+    require_trade_allowed: bool = True,
+    require_zero_magic_positions: bool = False,
+    require_zero_magic_orders: bool = False,
+) -> list[str]:
+    """Return blockers for order-enabled runtime startup.
+
+    The caller decides strictness from config. For example, a dry-run scanner can
+    collect a snapshot without requiring zero positions, while a demo order smoke
+    test can require both zero magic positions and zero magic pending orders.
+    """
+    blockers: list[str] = []
+    if snapshot.get("account_server") is None:
+        blockers.append("MT5 account_info unavailable")
+    if not snapshot.get("terminal_connected", False):
+        blockers.append("MT5 terminal_info unavailable")
+    if expected_account_server and snapshot.get("account_server") != expected_account_server:
+        blockers.append(
+            f"account_server mismatch: expected {expected_account_server}, "
+            f"got {snapshot.get('account_server')}"
+        )
+    if expected_login is not None and snapshot.get("account_login") != expected_login:
+        blockers.append(
+            f"account_login mismatch: expected {expected_login}, got {snapshot.get('account_login')}"
+        )
+    if snapshot.get("trade_mode_label") == "REAL":
+        blockers.append("REAL account is rejected")
+    if require_trade_allowed and not bool(snapshot.get("trade_allowed", False)):
+        blockers.append("trade_allowed is false")
+    if require_zero_magic_positions and int(snapshot.get("magic_positions_count", 0)) != 0:
+        blockers.append(f"magic positions not zero: {snapshot.get('magic_positions_count')}")
+    if require_zero_magic_orders and int(snapshot.get("magic_orders_count", 0)) != 0:
+        blockers.append(f"magic pending orders not zero: {snapshot.get('magic_orders_count')}")
+    blockers.extend(str(item) for item in snapshot.get("errors", []))
+    return blockers
+
+
+def write_mt5_account_state_snapshot(
+    log_dir: Path,
+    snapshot: dict[str, Any],
+    filename: str = "mt5_account_state.jsonl",
+) -> None:
+    """Append the account/magic snapshot to runtime logs."""
+    append_jsonl(log_dir / filename, {"event": "mt5_account_state_snapshot", **snapshot})
+
+
 def mt5_comment_id(comment_prefix: str, intent_id: str, max_comment: int = 16) -> str:
     comment_id = intent_id[:8]
     prefix = comment_prefix.strip() or "MT5"

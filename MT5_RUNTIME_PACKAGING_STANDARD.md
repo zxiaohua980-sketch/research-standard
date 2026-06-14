@@ -79,6 +79,10 @@ caches, local test configs, or machine-specific files as the operator copy folde
 - identity: `strategy_id`, `runtime_id`, `instance_name`, `magic_number`, `comment_prefix`,
   `mt5_comment_max_length`;
 - runtime: `mode`, `refresh_seconds`, `terminal_path`, `timezone`, `console_live_output`;
+- runtime smoke: `run_mt5_smoke_on_build=false`, `expected_account_server`, `expected_login`,
+  `print_account_magic_snapshot`, `write_account_magic_snapshot`,
+  `require_trade_allowed_for_orders`, `require_zero_magic_positions_before_smoke`, and
+  `require_zero_magic_orders_before_smoke`;
 - market data: `data_source=mt5_api`, `bars_to_keep=3000`, `cache_refresh_bars`,
   `data_cache_dir=.\data_cache`, `exclude_current_bar=true`, `atomic_cache_write=true`;
 - order limits: `order_enabled`, `risk_cash_per_order`, `max_volume_per_order`,
@@ -240,32 +244,100 @@ require manual review or an explicit retry policy.
 
 Packaging must not use PyInstaller as the debugging loop.
 
-Required sequence:
+Do not turn every package build into a live MT5 session. Split verification into two levels:
 
-1. run the source monitor with the final intended config;
-2. verify config read, MT5 connection, visible identity header, logs/cache creation, 3000-bar
-   cache seed/update, startup reconciliation, and at least one monitor cycle;
-3. run package audit/preflight and fail on any contract FAIL;
-4. build with PyInstaller only after source preflight passes;
+1. **Static/offline package audit**: may run on any computer and must not call
+   `mt5.initialize()`, open MT5, or query the account. It verifies Python syntax, import safety,
+   config fields, path portability, risk formula code paths, pending-order formula code paths,
+   signal-ledger code paths, build scripts, and portable-folder hygiene.
+2. **Runtime MT5 smoke**: connects to the already available/configured MT5 terminal only when the
+   user asks to run the source/EXE, when DEMO order testing is explicitly authorized, or when the
+   deliverable is being verified on the target machine. This step verifies config read, MT5
+   connection, visible identity header, logs/cache creation, cache seed/update, startup
+   reconciliation, one monitor cycle, and optional DEMO order behavior.
+
+Required offline build sequence:
+
+1. run static package audit/preflight and fail on any contract FAIL;
+2. compile/import-check source modules without order side effects;
+3. verify `config.ini` contains all required risk/order/reconciliation fields;
+4. build with PyInstaller only after static preflight passes;
 5. run package audit again after build;
-6. launch the packaged EXE directly from the portable folder;
-7. copy the portable folder to a different temporary path and launch again;
-8. record EXE hash, config hash, build command, preflight result, audit result, and smoke
-   result.
+6. inspect the portable folder for path leaks, build artifacts, historical logs/caches, and
+   missing external config;
+7. record EXE hash, config hash, build command, preflight result, and audit result.
+
+Required runtime smoke sequence, only when explicitly running the runtime:
+
+1. run the source monitor or packaged EXE with the final intended config;
+2. connect to MT5 from runtime code, not from the build script;
+3. print/log the account and magic-number snapshot;
+4. verify visible identity header, logs/cache creation, cache update, startup reconciliation, and
+   at least one monitor cycle;
+5. for DEMO order smoke, confirm open/modify/close by broker state and then restore safe defaults.
 
 `build_exe.bat` should call a local preflight script before PyInstaller and fail immediately
-on missing config fields, path leaks, missing logs/cache contract, source-run failure, or
-audit FAIL. In non-Git local strategy folders, this build-time preflight is the main hook
-that supervises compliance.
+on missing config fields, path leaks, missing risk/order code paths, or audit FAIL. It should not
+open MT5 unless it is an explicitly named runtime-smoke command. In non-Git local strategy
+folders, this build-time preflight is the main hook that supervises compliance.
+
+## MT5 Trading Code Implementation Contract
+
+Trading helpers must be written as import-safe, side-effect-light code. Reusable helpers such as
+`mt5_runtime_common.py` may define account-state and order helpers, but importing the module must
+not initialize MT5, open the terminal, read a machine-specific path, or send any order.
+
+Use this structure for account/magic checks:
+
+```python
+# Caller has already called mt5.initialize() as part of an explicit runtime command.
+snapshot = mt5_account_state_snapshot(mt5, magic=config.magic_number)
+for line in format_mt5_account_state_lines(snapshot):
+    print(line)
+write_mt5_account_state_snapshot(Path(config.log_dir), snapshot)
+blockers = mt5_account_state_blockers(
+    snapshot,
+    expected_account_server=config.expected_account_server or None,
+    expected_login=config.expected_login or None,
+    require_trade_allowed=config.order_enabled,
+    require_zero_magic_positions=config.require_zero_magic_positions_before_smoke,
+    require_zero_magic_orders=config.require_zero_magic_orders_before_smoke,
+)
+if blockers:
+    enter_safe_mode(blockers)
+```
+
+The short console block should be produced by the runtime smoke/order path, not by the offline
+build:
+
+```text
+当前账户：ICMarketsSC-Demo
+trade_allowed=True
+magic 24068 持仓：0
+magic 24068 挂单：0
+```
+
+`ICMarketsSC-Demo`, login, magic number, and zero-position requirements must come from config or
+the runtime command, not hardcoded in shared helper code. The reusable helper should expose:
+
+- `mt5_account_state_snapshot(mt5, magic, symbol=None, include_details=True)`;
+- `format_mt5_account_state_lines(snapshot)`;
+- `mt5_account_state_blockers(snapshot, ...)`;
+- `write_mt5_account_state_snapshot(log_dir, snapshot)`.
+
+The snapshot/blocker functions are required before order-enabled runtime logic, but they are not a
+reason to open MT5 for every packaging build. Static audit should verify these functions or their
+equivalent exist; runtime smoke should execute them only when the user intentionally runs the
+runtime against MT5.
 
 ## Verification Checklist
 
 A package cannot be called `portable_package_ready` unless:
 
-- source preflight passed;
+- static package preflight passed;
 - package audit has no FAIL;
-- final EXE direct launch was tested;
-- console shows dynamic cycle output;
+- final EXE direct launch was tested when a runtime smoke was requested or required for handoff;
+- console shows dynamic cycle output during runtime smoke;
 - outputs are written under the portable folder;
 - MT5 path discovery works without developer-machine absolute paths;
 - logs and data cache are created;

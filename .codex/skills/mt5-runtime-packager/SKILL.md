@@ -1,6 +1,6 @@
 ---
 name: mt5-runtime-packager
-description: Package, audit, or document MetaTrader 5 / MT5 Python runtime monitors as portable Windows EXEs with PyInstaller, direct double-click EXE operation, external config.ini, live console status output, MT5 API market-data caching, cost-inclusive position sizing with commission/spread/slippage risk denominator, spread-aware pending-order entry/SL/TP policies, persistent signal-execution ledgers that block duplicate same-bar orders, reconciliation logs, demo-only safety gates, configurable magic/comment namespaces, and MT5 terminal/data-path discovery. Use for MT5 runtime packaging, config.ini risk/order design, PyInstaller builds, demo order execution plumbing, portable EXEs, source-run preflight tests, moving runtimes to another computer, or Chinese requests such as 打包成exe文件, 模拟下单, 仓位计算, 手续费点差滑点, 挂单价格, 防止重复下单.
+description: Package, audit, or document MetaTrader 5 / MT5 Python runtime monitors as portable Windows EXEs with offline/static build checks that do not open MT5, explicit runtime-only MT5 account/magic snapshots, direct double-click EXE operation, external config.ini, live console status output, MT5 API market-data caching, cost-inclusive position sizing with commission/spread/slippage risk denominator, spread-aware pending-order entry/SL/TP policies, persistent signal-execution ledgers that block duplicate same-bar orders, reconciliation logs, demo-only safety gates, configurable magic/comment namespaces, and MT5 terminal/data-path discovery. Use for MT5 runtime packaging, config.ini risk/order design, PyInstaller builds, demo order execution plumbing, portable EXEs, runtime smoke tests, moving runtimes to another computer, or Chinese requests such as 打包成exe文件, 模拟下单, 仓位计算, 手续费点差滑点, 挂单价格, 防止重复下单.
 ---
 
 # MT5 Runtime Packager
@@ -18,8 +18,8 @@ Before touching a trading runtime, obey the project `AGENTS.md` and registry. St
 3. Run or adapt `scripts/audit_mt5_runtime_package.py <runtime_dir>` for a first-pass audit.
 4. Fix portability before packaging. Hardcoded MT5 terminal IDs, user-specific `MetaQuotes\Terminal\<hash>` paths, repo-root fallbacks, and machine-local data paths are blockers.
 5. If the runtime needs MT5 API OHLC, Python ZigZag/fractal calculation, or demo order management helpers, read `references/mt5-runtime-common-code.md` and copy/adapt `scripts/mt5_runtime_common.py` into the runtime staging folder.
-6. Before PyInstaller, run the source runtime with the intended `config.ini`. It must read config, connect to MT5, print identity, create logs/cache, seed or update the bounded 3000 closed-bar cache, reconcile account state, scan at least one cycle, and exit or continue without exception. Do not use PyInstaller as the debugging loop.
-7. Package with PyInstaller from a clean staging directory only after the source-run preflight passes. Copy only required strategy/runtime modules and shared helpers.
+6. Do not open MT5 for every package build. First run an offline/static preflight that does not call `mt5.initialize()`: syntax/import safety, config fields, path portability, risk formula code paths, pending-order formula code paths, signal-ledger code paths, and portable-folder hygiene. Run MT5 source/EXE smoke only when the user explicitly asks to execute the runtime, when DEMO order testing is authorized, or when verifying the deliverable on the target machine.
+7. Package with PyInstaller from a clean staging directory only after the offline/static preflight passes. Copy only required strategy/runtime modules and shared helpers.
 8. Keep `config.ini` external beside the EXE. Never bury machine-specific settings, account identity, risk limits, refresh interval, magic number, comment prefix, or MT5 paths inside the binary.
 9. The modern operator deliverable is opened by double-clicking the EXE. BAT files are optional legacy wrappers only and must not be the primary contract.
 10. Verify cost-inclusive position sizing before any order-capable runtime is packaged: lots must equal configured risk cash divided by total per-lot risk, where total per-lot risk includes entry-to-SL price loss, commission, configured/fetched spread, and slippage estimate. XAUUSD and BTCUSD may be commission-free only when explicitly configured.
@@ -27,7 +27,7 @@ Before touching a trading runtime, obey the project `AGENTS.md` and registry. St
 12. Verify account reconciliation, persistent signal execution ledger, and outage recovery behavior before any monitor is allowed to place demo orders.
 13. After every source or config-default fix, rebuild and re-run the final EXE from the deliverable folder; do not rely on a pre-rebuild source test.
 14. Build a clean portable deliverable folder for copying to another computer. The primary operator folder should contain only the EXE, `config.ini`, empty `logs\`, empty `data_cache\`, and optional user-requested hash/docs files. Do not deliver the source runtime directory, PyInstaller `build`, `.spec`, historical logs, historical caches, or local test configs.
-15. Record the EXE hash, config hash, build command, portable folder contents, safety-gate status, source-run preflight result, and final portable EXE smoke-test result.
+15. Record the EXE hash, config hash, build command, portable folder contents, static preflight result, and any explicitly requested runtime smoke-test result.
 
 ## Direct EXE Operator Contract
 
@@ -111,6 +111,7 @@ Keep old BAT names only as wrappers if users already have shortcuts; make them d
 
 - identity: `strategy_id`, `runtime_id`, `instance_name`, `magic_number`, `comment_prefix`, `mt5_comment_max_length`;
 - runtime: `mode`, `refresh_seconds`, `terminal_path`, `timezone`, `console_live_output`;
+- runtime smoke: `run_mt5_smoke_on_build=false`, `expected_account_server`, `expected_login`, `print_account_magic_snapshot`, `write_account_magic_snapshot`, `require_trade_allowed_for_orders`, `require_zero_magic_positions_before_smoke`, `require_zero_magic_orders_before_smoke`;
 - market data: `data_source=mt5_api`, `bars_to_keep=3000`, `cache_refresh_bars`, `data_cache_dir=.\data_cache`, `exclude_current_bar=true`, `atomic_cache_write=true`;
 - order limits: `order_enabled`, `risk_cash_per_order`, `max_volume_per_order`, `max_total_volume`, `max_positions_total`, `max_positions_per_symbol`, `max_new_orders_per_cycle`;
 - cost-inclusive sizing: `position_sizing_mode=cost_inclusive_risk_cash`, `include_commission_in_risk=true`, `commission_per_lot_round_turn_usd=7.0`, `commission_free_symbols=XAUUSD,BTCUSD`, `include_spread_in_risk=true`, `spread_source=fixed_points`, `fixed_spread_points_default`, `include_slippage_in_risk=true`, `slippage_points_entry`, `slippage_points_exit`, `volume_rounding=floor_to_step`, `max_risk_overshoot_pct=0`;
@@ -415,16 +416,62 @@ If an open command was sent but no position/order/deal can be confirmed, mark it
 
 For signal-driven monitors, do not rely only on "current open position count" to prevent duplicate opens. If a position is opened and then closed by SL/TP within the same candle, the same completed signal bar must remain consumed in a persistent ledger such as `signal_execution_ledger.jsonl`. Write the ledger before or at order attempt time and fsync it when practical.
 
+## MT5 Trading Code Implementation Contract
+
+Reusable trading helpers such as `mt5_runtime_common.py` must be import-safe and side-effect-light.
+Importing the helper must not call `mt5.initialize()`, open MT5, read machine-specific terminal
+paths, send orders, modify orders, or close positions.
+
+Do not require a live MT5 session for every package build. Use two levels:
+
+1. **Offline/static package audit**: verifies code/config/build contracts without touching MT5.
+2. **Runtime MT5 smoke**: connects to MT5 only when the user intentionally runs the source/EXE,
+   authorizes DEMO order testing, or asks to verify the deliverable on the target computer.
+
+Concrete account/magic status code should be centralized in the runtime helper:
+
+```python
+# Caller has already initialized MT5 as part of an explicit runtime command.
+snapshot = mt5_account_state_snapshot(mt5, magic=config.magic_number)
+for line in format_mt5_account_state_lines(snapshot):
+    print(line)
+write_mt5_account_state_snapshot(Path(config.log_dir), snapshot)
+blockers = mt5_account_state_blockers(
+    snapshot,
+    expected_account_server=config.expected_account_server or None,
+    expected_login=config.expected_login or None,
+    require_trade_allowed=config.order_enabled,
+    require_zero_magic_positions=config.require_zero_magic_positions_before_smoke,
+    require_zero_magic_orders=config.require_zero_magic_orders_before_smoke,
+)
+if blockers:
+    enter_safe_mode(blockers)
+```
+
+The human-readable runtime smoke block is:
+
+```text
+当前账户：ICMarketsSC-Demo
+trade_allowed=True
+magic 24068 持仓：0
+magic 24068 挂单：0
+```
+
+But `ICMarketsSC-Demo`, login, magic number and zero-position requirements must come from
+`config.ini` or the explicit runtime command, never hardcoded in shared helpers. Static packaging
+should verify that this code path exists. Runtime smoke/order-enabled startup should execute it
+only when MT5 is intentionally being run.
+
 ## Verification Checklist
 
 Run verification in this order:
 
-1. Source preflight: run the Python/source monitor with the final intended config before packaging. It must print identity, connect MT5, create `logs\` and `data_cache\`, reconcile account state, seed/update bounded 3000 closed-bar caches, perform at least one scan cycle, and show live console progress.
+1. Offline/static preflight: syntax/import safety, config parsing, path portability, cost-inclusive sizing path, pending-order price policy path, signal-ledger path, and package hygiene. This step must not open MT5.
 2. Package audit: run or adapt `scripts/audit_mt5_runtime_package.py <runtime_dir>` and fail on any safety, portability, config, direct-EXE, logging, reconciliation, or cache-contract FAIL.
-3. Build: run the maintained PyInstaller build script only after source preflight and audit pass. Treat cleanup errors, file-in-use, or access denied as blockers.
-4. Final EXE smoke: launch the packaged EXE directly from the portable folder with its beside-EXE `config.ini`. It must show the live header immediately and write outputs under the portable folder.
-5. Portability smoke: copy the portable folder to a different temporary path and launch the EXE there. Outputs must be written under the copied folder, not the original repo/runtime/build directory.
-6. Runtime monitor smoke: run at least one full monitor cycle. Confirm dynamic console updates, `monitor_cycle pass` or equivalent, reconciliation counts, scan counts, cache update status, and no unexpected `order_send` when config disables orders.
+3. Build: run the maintained PyInstaller build script only after offline/static preflight and audit pass. Treat cleanup errors, file-in-use, or access denied as blockers.
+4. Final EXE smoke: only when runtime execution is requested/required, launch the packaged EXE directly from the portable folder with its beside-EXE `config.ini`. It must show the live header immediately and write outputs under the portable folder.
+5. Portability smoke: when runtime execution is requested/required, copy the portable folder to a different temporary path and launch the EXE there. Outputs must be written under the copied folder, not the original repo/runtime/build directory.
+6. Runtime monitor smoke: when runtime execution is requested/required, run at least one full monitor cycle. Confirm dynamic console updates, account/magic snapshot, `monitor_cycle pass` or equivalent, reconciliation counts, scan counts, cache update status, and no unexpected `order_send` when config disables orders.
 7. Order smoke: only after the user explicitly authorizes DEMO testing, run a demo-only open/modify/close or `close_all_magic`, then restore the safe default config. Verify retcode plus broker-state observation, lifecycle rows, history export, and final magic-number positions/orders check.
 8. Risk/config audit: verify cost-inclusive sizing, commission-free symbol overrides, spread/slippage risk components, pending-order price formulas, raw-vs-adjusted order journal fields, and same-signal-bar duplicate blocking.
 9. Final hygiene: portable logs and data caches should be empty for delivery unless the user asked to include target-machine diagnostic evidence. Text files and EXE strings should not contain machine-specific paths such as `D:\MT5`, `C:\Users\<name>`, `%APPDATA%\MetaQuotes\Terminal`, or terminal hash IDs.
@@ -432,6 +479,7 @@ Run verification in this order:
 Expected runtime behavior:
 
 - Direct EXE launch is sufficient; optional BAT wrappers cannot be the only tested path.
+- Offline packaging does not by itself open MT5; live account/magic checks belong to intentional runtime smoke or order-enabled startup.
 - A strategy monitor with no latest signal reports `attempted=0` rather than forcing a trade.
 - Startup reconciles existing positions, pending orders, recent order/deal history, and unresolved local intents before scanning new signals.
 - Position size uses cost-inclusive risk denominator: entry-to-SL loss plus commission, spread, and slippage.
@@ -449,7 +497,7 @@ Use build-time hooks for enforcement:
 - add or adapt a local preflight script such as `scripts/preflight_mt5_runtime_contract.py`;
 - make `build_exe.bat` call the preflight before PyInstaller and fail immediately on contract failures;
 - make the build script call the package audit after PyInstaller and fail on any FAIL;
-- require a small evidence file such as `logs\source_preflight_last.json` or `build_preflight_report.json` recording config path, source-run result, cache/log creation, MT5 account state, and one-cycle scan status;
+- require a small evidence file such as `build_preflight_report.json` for offline checks, and only when runtime smoke is explicitly run, `logs\source_preflight_last.json` recording config path, source-run result, cache/log creation, MT5 account state, and one-cycle scan status;
 - for Git/CI repositories, run the same preflight/audit in pre-commit or CI; for non-Git local strategy folders, the build script is the most reliable hook.
 
 When this skill triggers, Codex should prefer adding or using these hooks instead of relying on memory. If no hook exists, report that gap before packaging.

@@ -20,6 +20,10 @@ The module includes:
 - `send_market_order_once(...)`
 - `close_position_once(...)`
 - `magic_positions(...)` and `magic_orders(...)`
+- `mt5_account_state_snapshot(...)`
+- `format_mt5_account_state_lines(...)`
+- `mt5_account_state_blockers(...)`
+- `write_mt5_account_state_snapshot(...)`
 - `confirm_open_position(...)` and `confirm_position_closed(...)`
 - `load_order_intent_latest(...)`
 - `export_magic_history_rows(...)`
@@ -48,6 +52,45 @@ mt5_comment_max_length = 16
 ```
 
 The common module hard-rejects REAL accounts. Do not weaken that in a skill-derived runtime.
+
+## MT5 Account/Magic State Pattern
+
+Do not open MT5 just because a package is being built. Offline package audits should verify that
+the code path exists, but should not call `mt5.initialize()`.
+
+Use the account/magic snapshot only in an explicit runtime command, source/EXE smoke test, or
+order-enabled startup after the caller has already initialized MT5:
+
+```python
+snapshot = mt5_account_state_snapshot(mt5, magic=gates.magic)
+for line in format_mt5_account_state_lines(snapshot):
+    print(line)
+write_mt5_account_state_snapshot(Path("logs"), snapshot)
+
+blockers = mt5_account_state_blockers(
+    snapshot,
+    expected_account_server=config.expected_account_server or None,
+    expected_login=config.expected_login or None,
+    require_trade_allowed=config.order_enabled,
+    require_zero_magic_positions=config.require_zero_magic_positions_before_smoke,
+    require_zero_magic_orders=config.require_zero_magic_orders_before_smoke,
+)
+if blockers:
+    # enter safe mode; do not send orders
+    print("MT5 state blockers:", blockers)
+```
+
+Expected short console output:
+
+```text
+当前账户：ICMarketsSC-Demo
+trade_allowed=True
+magic 24068 持仓：0
+magic 24068 挂单：0
+```
+
+The server, login, magic number, and zero-state requirements must come from `config.ini` or the
+explicit runtime command. Do not hardcode `ICMarketsSC-Demo` or `24068` into shared helpers.
 
 ## ZigZag Usage Pattern
 
@@ -118,4 +161,3 @@ If copied into a runtime, include the module in the PyInstaller staging folder a
 3. Run a one-cycle demo monitor with a temporary enabled config.
 4. Run the package audit script.
 5. Check final magic-number positions and orders are not unexpectedly left open.
-

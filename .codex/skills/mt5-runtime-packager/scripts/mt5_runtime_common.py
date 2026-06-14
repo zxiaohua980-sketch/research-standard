@@ -297,6 +297,40 @@ def market_entry_price_from_tick(mt5: Any, symbol: str, side: str) -> tuple[floa
     }
 
 
+def spread_price_from_tick(mt5: Any, symbol: str) -> tuple[float, dict[str, Any]]:
+    """Return current broker spread as ``tick.ask - tick.bid``.
+
+    This helper is import-safe: it does not initialize MT5 and does not send an
+    order. Call it only inside an intentional runtime/smoke/order path after the
+    caller has initialized MT5.
+    """
+    tick = mt5.symbol_info_tick(symbol)
+    if tick is None:
+        raise RuntimeError(f"symbol_info_tick unavailable for {symbol}")
+    info = mt5.symbol_info(symbol)
+    bid = float(getattr(tick, "bid", 0.0) or 0.0)
+    ask = float(getattr(tick, "ask", 0.0) or 0.0)
+    if bid <= 0 or ask <= 0 or ask < bid:
+        raise RuntimeError(f"invalid bid/ask for spread on {symbol}: bid={bid}, ask={ask}")
+
+    point = float(getattr(info, "point", 0.0) or 0.0) if info is not None else 0.0
+    time_msc = getattr(tick, "time_msc", None)
+    spread_price = ask - bid
+    spread_points = spread_price / point if point > 0 else None
+    return spread_price, {
+        "symbol": symbol,
+        "spread_source": "mt5_tick",
+        "spread_formula": "symbol_info_tick.ask - symbol_info_tick.bid",
+        "bid": bid,
+        "ask": ask,
+        "point": point,
+        "spread_price": spread_price,
+        "spread_points": spread_points,
+        "tick_time": getattr(tick, "time", None),
+        "tick_time_msc": time_msc,
+    }
+
+
 def bid_chart_to_mt5_order_prices(
     *,
     side: str,
@@ -316,6 +350,11 @@ def bid_chart_to_mt5_order_prices(
     - SELL pending entries (Sell Stop/Sell Limit) trigger on Bid, so do not adjust entry.
     - BUY position SL/TP close on Bid, so do not adjust SL/TP.
     - SELL position SL/TP close on Ask, so add spread to SL/TP.
+
+    ``spread_price`` must be non-negative. For live/demo order-capable runtimes,
+    prefer ``spread_price_from_tick(mt5, symbol)`` so the source is
+    ``symbol_info_tick().ask - symbol_info_tick().bid`` at decision time. Fixed
+    spread points are acceptable only when config explicitly selects them.
 
     The function returns both adjusted prices and an audit dictionary. It performs no MT5 I/O.
     """
@@ -363,6 +402,130 @@ def bid_chart_to_mt5_order_prices(
             "buy_sltp": "raw_sl/raw_tp",
             "sell_sltp": "raw_sl/raw_tp + spread_price",
         },
+    }
+
+
+def min_pending_distance_from_symbol_info(
+    symbol_info: Any,
+    *,
+    buffer_points: float = 0.0,
+) -> tuple[float, dict[str, Any]]:
+    """Return conservative broker minimum distance for pending order placement.
+
+    MT5 symbols expose ``trade_stops_level`` for minimum stop/pending distance
+    and ``trade_freeze_level`` for the near-market zone where order changes may
+    be blocked. For runtime safety we use the larger value plus a configurable
+    buffer. This helper performs no MT5 I/O.
+    """
+    point = float(getattr(symbol_info, "point", 0.0) or 0.0)
+    stops_level = float(getattr(symbol_info, "trade_stops_level", 0.0) or 0.0)
+    freeze_level = float(getattr(symbol_info, "trade_freeze_level", 0.0) or 0.0)
+    buffer = float(buffer_points or 0.0)
+    min_distance_points = max(stops_level, freeze_level) + buffer
+    min_distance_price = min_distance_points * point
+    return min_distance_price, {
+        "point": point,
+        "trade_stops_level": stops_level,
+        "trade_freeze_level": freeze_level,
+        "buffer_points": buffer,
+        "min_distance_points": min_distance_points,
+        "min_distance_price": min_distance_price,
+    }
+
+
+def pending_entry_state_from_tick(
+    *,
+    order_type: str,
+    adjusted_entry: float,
+    tick_bid: float,
+    tick_ask: float,
+    min_distance_price: float = 0.0,
+) -> dict[str, Any]:
+    """Classify whether a pending entry should be placed, watched, or market-converted.
+
+    The returned ``action`` is one of:
+
+    - ``place_pending``: original adjusted entry is far enough from current price;
+    - ``convert_to_market``: trigger side has already reached the adjusted entry;
+    - ``armed_trigger_watch``: entry is not triggered but is too close to place.
+
+    Use this after a pending ``order_send`` invalid-price/invalid-stops/requote
+    response as well as before the initial pending send. Reuse the same
+    signal/intent id; do not create duplicate order intents.
+    """
+    kind = order_type.strip().upper()
+    aliases = {
+        "BUY": "BUY_STOP",
+        "SELL": "SELL_STOP",
+        "BUYSTOP": "BUY_STOP",
+        "SELLSTOP": "SELL_STOP",
+        "BUYLIMIT": "BUY_LIMIT",
+        "SELLLIMIT": "SELL_LIMIT",
+    }
+    kind = aliases.get(kind, kind)
+    if kind not in {"BUY_STOP", "SELL_STOP", "BUY_LIMIT", "SELL_LIMIT"}:
+        raise ValueError(f"unsupported pending order_type: {order_type}")
+    entry = float(adjusted_entry)
+    bid = float(tick_bid)
+    ask = float(tick_ask)
+    min_dist = max(0.0, float(min_distance_price or 0.0))
+    if entry <= 0 or bid <= 0 or ask <= 0 or ask < bid:
+        raise ValueError(f"invalid pending state prices: entry={entry}, bid={bid}, ask={ask}")
+
+    if kind == "BUY_STOP":
+        trigger_side = "ask"
+        trigger_price = ask
+        already_triggered = ask >= entry
+        distance_price = entry - ask
+        placeable = entry > ask + min_dist
+        market_side = "BUY"
+    elif kind == "SELL_STOP":
+        trigger_side = "bid"
+        trigger_price = bid
+        already_triggered = bid <= entry
+        distance_price = bid - entry
+        placeable = entry < bid - min_dist
+        market_side = "SELL"
+    elif kind == "BUY_LIMIT":
+        trigger_side = "ask"
+        trigger_price = ask
+        already_triggered = ask <= entry
+        distance_price = ask - entry
+        placeable = entry < ask - min_dist
+        market_side = "BUY"
+    else:  # SELL_LIMIT
+        trigger_side = "bid"
+        trigger_price = bid
+        already_triggered = bid >= entry
+        distance_price = entry - bid
+        placeable = entry > bid + min_dist
+        market_side = "SELL"
+
+    if already_triggered:
+        action = "convert_to_market"
+        reason = "trigger_side_already_reached_adjusted_entry"
+    elif placeable:
+        action = "place_pending"
+        reason = "broker_min_distance_satisfied"
+    else:
+        action = "armed_trigger_watch"
+        reason = "inside_broker_min_distance_wait_tick_or_market_if_triggered"
+
+    return {
+        "order_type": kind,
+        "market_side": market_side,
+        "adjusted_entry": entry,
+        "bid": bid,
+        "ask": ask,
+        "trigger_side": trigger_side,
+        "trigger_price": trigger_price,
+        "already_triggered": already_triggered,
+        "distance_price": distance_price,
+        "min_distance_price": min_dist,
+        "placeable": placeable,
+        "action": action,
+        "reason": reason,
+        "pending_too_close_policy": "wait_until_valid_or_market_if_triggered",
     }
 
 

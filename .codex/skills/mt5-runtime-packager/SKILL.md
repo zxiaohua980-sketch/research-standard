@@ -1,6 +1,6 @@
 ---
 name: mt5-runtime-packager
-description: Package, audit, or document MT5 Python runtime monitors as minimal portable EXE operator folders with one runnable EXE, beside-EXE config.ini, empty logs, no BAT/CMD/PS1 wrappers in the final folder, offline/static build checks that do not open MT5, runtime-only account/magic snapshots, cost-inclusive sizing, MT5 bid/ask-correct market/open entries, Buy Stop/Sell Stop and SL/TP spread handling, same-bar duplicate-order ledgers, reconciliation logs, demo-only safety gates, magic/comment namespaces, and terminal/data-path discovery. Use for MT5 runtime packaging, config.ini risk/order design, PyInstaller builds, demo order plumbing, portable EXEs, runtime smoke tests, moving runtimes to another computer, or Chinese requests such as 打包成exe文件, 模拟下单, 仓位计算, 手续费点差滑点, 挂单价格, 防止重复下单.
+description: Package, audit, or document MT5 Python runtime monitors as minimal portable EXE operator folders with one runnable EXE, beside-EXE config.ini, empty logs, no BAT/CMD/PS1 wrappers in the final folder, offline/static build checks that do not open MT5, runtime-only account/magic snapshots, cost-inclusive sizing, MT5 bid/ask-correct market/open entries, explicit spread source/sign rules, Buy Stop/Sell Stop and SL/TP spread handling, pending-too-close tick monitoring with market conversion when triggered, same-bar duplicate-order ledgers, reconciliation logs, demo-only safety gates, magic/comment namespaces, and terminal/data-path discovery. Use for MT5 runtime packaging, config.ini risk/order design, PyInstaller builds, demo order plumbing, portable EXEs, runtime smoke tests, moving runtimes to another computer, or Chinese requests such as 打包成exe文件, 模拟下单, 仓位计算, 手续费点差滑点, 挂单价格, 防止重复下单.
 ---
 
 # MT5 Runtime Packager
@@ -23,7 +23,7 @@ Before touching a trading runtime, obey the project `AGENTS.md` and registry. St
 8. Keep `config.ini` external beside the EXE. Never bury machine-specific settings, account identity, risk limits, refresh interval, magic number, comment prefix, or MT5 paths inside the binary.
 9. The modern operator deliverable is opened by double-clicking the EXE. BAT files are optional legacy wrappers only and must not be the primary contract.
 10. Verify cost-inclusive position sizing before any order-capable runtime is packaged: lots must equal configured risk cash divided by total per-lot risk, where total per-lot risk includes entry-to-SL price loss, commission, configured/fetched spread, and slippage estimate. XAUUSD and BTCUSD may be commission-free only when explicitly configured.
-11. Verify entry price construction before any order-capable runtime is packaged. Market/open-price entries and pending-order entries are different contracts. A market/open-price entry must not reuse the pending-order `entry +/- spread` adjustment; pending orders must declare their own price basis and spread-adjustment policy for entry, SL and TP.
+11. Verify entry price construction before any order-capable runtime is packaged. Market/open-price entries and pending-order entries are different contracts. A market/open-price entry must not reuse the pending-order `entry +/- spread` adjustment; pending orders must declare their own price basis, spread source, spread add/no-add rules, broker minimum-distance handling, and tick-level trigger watch for entry, SL and TP.
 12. Verify account reconciliation, persistent signal execution ledger, and outage recovery behavior before any monitor is allowed to place demo orders.
 13. After every source or config-default fix, rebuild and re-run the final EXE from the deliverable folder; do not rely on a pre-rebuild source test.
 14. Build a clean portable **operator** deliverable folder for copying to another computer. The user-facing folder must be minimal: one immediately double-click runnable `.exe`, one beside-EXE `config.ini`, and an empty `logs\` directory. `data_cache\` is allowed only when the config/runtime needs it, and it must be empty at delivery. Do not put BAT/CMD/PowerShell wrappers in the operator folder.
@@ -121,13 +121,13 @@ Keep old BAT names only as development/legacy wrappers if users already have sho
 `config.ini` must be the operator control surface. At minimum it must externalize:
 
 - identity: `strategy_id`, `runtime_id`, `instance_name`, `magic_number`, `comment_prefix`, `mt5_comment_max_length`;
-- runtime: `mode`, `refresh_seconds`, `terminal_path`, `timezone`, `console_live_output`;
+- runtime: `mode`, `refresh_seconds`, `terminal_path`, `timezone`, `console_live_output`, `pending_monitor_mode=tick`, `tick_poll_interval_ms`;
 - runtime smoke: `run_mt5_smoke_on_build=false`, `expected_account_server`, `expected_login`, `print_account_magic_snapshot`, `write_account_magic_snapshot`, `require_trade_allowed_for_orders`, `require_zero_magic_positions_before_smoke`, `require_zero_magic_orders_before_smoke`;
 - market data: `data_source=mt5_api`, `bars_to_keep=3000`, `cache_refresh_bars`, `data_cache_dir=.\data_cache`, `exclude_current_bar=true`, `atomic_cache_write=true`;
 - order limits: `order_enabled`, `risk_cash_per_order`, `max_volume_per_order`, `max_total_volume`, `max_positions_total`, `max_positions_per_symbol`, `max_new_orders_per_cycle`;
-- cost-inclusive sizing: `position_sizing_mode=cost_inclusive_risk_cash`, `include_commission_in_risk=true`, `commission_per_lot_round_turn_usd=7.0`, `commission_free_symbols=XAUUSD,BTCUSD`, `include_spread_in_risk=true`, `spread_source=fixed_points`, `fixed_spread_points_default`, `include_slippage_in_risk=true`, `slippage_points_entry`, `slippage_points_exit`, `volume_rounding=floor_to_step`, `max_risk_overshoot_pct=0`;
+- cost-inclusive sizing: `position_sizing_mode=cost_inclusive_risk_cash`, `include_commission_in_risk=true`, `commission_per_lot_round_turn_usd=7.0`, `commission_free_symbols=XAUUSD,BTCUSD`, `include_spread_in_risk=true`, `spread_source=mt5_tick`, `spread_fallback_source`, `fixed_spread_points_default`, `include_slippage_in_risk=true`, `slippage_points_entry`, `slippage_points_exit`, `volume_rounding=floor_to_step`, `max_risk_overshoot_pct=0`;
 - market/open-price entry execution: `entry_execution_mode`, `market_entry_price_policy=broker_tick_side_no_manual_spread`, `market_entry_use_tick_side=true`, `spread_adjust_market_entry=false`, and `spread_risk_accounting`;
-- pending-order management: `pending_expire_bars`, `pending_expire_minutes`, `cancel_stale_pending=true`, `signal_price_basis`, `pending_price_policy`, `sltp_price_policy`, and side-specific bid/ask spread handling for BUY pending entries, SELL pending entries, BUY SL/TP, and SELL SL/TP;
+- pending-order management: `pending_expire_bars`, `pending_expire_minutes`, `cancel_stale_pending=true`, `signal_price_basis`, `pending_price_policy`, `sltp_price_policy`, side-specific bid/ask spread handling for BUY pending entries, SELL pending entries, BUY SL/TP, and SELL SL/TP, plus `pending_too_close_policy`, `market_if_pending_triggered`, and `pending_reprice_to_min_distance=false`;
 - duplicate-signal prevention: `signal_execution_ledger_path`, `signal_key_fields`, `consume_signal_before_order_send=true`, `block_duplicate_signal_bar=true`;
 - reconciliation: `reconcile_on_startup`, `reconcile_each_cycle`, `recovery_lookback_days`, `history_future_buffer_hours`, `order_confirm_timeout_seconds`, `order_confirm_poll_interval_seconds`, `unknown_freeze_new_orders`;
 - logging: `log_dir=.\logs`, `runtime_log_enabled`, `error_log_enabled`, `reconciliation_log_enabled`, `order_journal_enabled`, `position_snapshot_enabled`;
@@ -166,7 +166,8 @@ include_commission_in_risk = true
 commission_per_lot_round_turn_usd = 7.0
 commission_free_symbols = XAUUSD,BTCUSD
 include_spread_in_risk = true
-spread_source = fixed_points
+spread_source = mt5_tick
+spread_fallback_source = fixed_points
 fixed_spread_points_default =
 include_slippage_in_risk = true
 slippage_points_entry = 0
@@ -244,25 +245,46 @@ Default raw strategy levels are assumed to come from MT5 chart OHLC, which for F
 normally bid-chart data. Under `signal_price_basis=bid_chart`, convert raw strategy levels to MT5
 execution/trigger sides like this:
 
+`spread_price` is a non-negative price distance, not an arbitrary sign:
+
+```text
+Primary live/order source:
+spread_price  = current tick.ask - current tick.bid
+spread_points = spread_price / symbol.point
+
+Fallback deterministic source:
+spread_price = configured fixed_spread_points_default * symbol.point
+```
+
+The runtime must declare `spread_source=mt5_tick` for order-capable live/demo packages unless a
+deterministic fixed spread is explicitly selected for dry-run/backtest diagnostics. If
+`spread_source=mt5_tick`, read it from `symbol_info_tick(symbol).ask - symbol_info_tick(symbol).bid`
+at the order decision time. If using fixed points or a symbol override, log the exact config key.
+Always log: spread source, bid, ask, point, spread points, spread price, tick timestamp, and whether
+the spread value was used for price conversion, risk accounting, or both.
+
 ```text
 MARKET / OPEN-PRICE ENTRY
 BUY  entry = current tick.ask   # no manual raw_open + spread
 SELL entry = current tick.bid   # no manual raw_open - spread
 
 PENDING ENTRY
-BUY_STOP / BUY_LIMIT   entry = raw_entry + spread_price   # buy pending triggers on Ask
-SELL_STOP / SELL_LIMIT entry = raw_entry                  # sell pending triggers on Bid
+BUY_STOP / BUY_LIMIT   entry = raw_entry + spread_price   # ADD spread_price
+SELL_STOP / SELL_LIMIT entry = raw_entry                  # ADD nothing, SUBTRACT nothing
 
 ATTACHED SL/TP AFTER POSITION OPENS
-BUY  sl = raw_sl
-BUY  tp = raw_tp
-SELL sl = raw_sl + spread_price
-SELL tp = raw_tp + spread_price
+BUY  sl = raw_sl                    # ADD nothing, SUBTRACT nothing
+BUY  tp = raw_tp                    # ADD nothing, SUBTRACT nothing
+SELL sl = raw_sl + spread_price     # ADD spread_price
+SELL tp = raw_tp + spread_price     # ADD spread_price
 ```
 
 Do not use one symmetric "add/subtract spread everywhere" rule. The correct adjustment depends on
 whether the order is a market/open entry, buy pending entry, sell pending entry, BUY position SL/TP,
-or SELL position SL/TP.
+or SELL position SL/TP. Under the default `signal_price_basis=bid_chart` policy above, there is no
+"subtract spread" case. Any strategy that wants a different source basis such as ask-chart,
+mid-price or already-executable prices must declare a different `signal_price_basis` and provide a
+separate audited conversion table.
 
 Required config fields:
 
@@ -271,6 +293,7 @@ Required config fields:
 signal_price_basis = bid_chart
 pending_price_policy = broker_bidask_from_bid_chart
 sltp_price_policy = broker_bidask_from_bid_chart
+spread_price_source = mt5_tick
 adjust_buy_pending_entry_for_spread = true
 adjust_sell_pending_entry_for_spread = false
 adjust_buy_sltp_for_spread = false
@@ -292,7 +315,7 @@ First declare the signal price basis:
 [orders]
 signal_price_basis = bid_chart
 pending_price_policy = broker_bidask_from_bid_chart
-spread_price_source = same_as_risk
+spread_price_source = mt5_tick
 ```
 
 Supported policies:
@@ -333,6 +356,7 @@ Required config fields:
 pending_price_policy = broker_bidask_from_bid_chart
 sltp_price_policy = broker_bidask_from_bid_chart
 signal_price_basis = bid_chart
+spread_price_source = mt5_tick
 adjust_buy_pending_entry_for_spread = true
 adjust_sell_pending_entry_for_spread = false
 adjust_buy_sltp_for_spread = false
@@ -348,6 +372,80 @@ Audit requirements:
 - prove broker stops-level/min-distance checks run after adjustment;
 - prove order journal records both raw and adjusted levels;
 - reject packaging if policy or price basis is missing for order-capable runtimes.
+
+## Pending Too-Close And Tick-Level Trigger Contract
+
+Pending orders cannot be managed only once per minute. The bar/closed-candle scan may still run on
+`refresh_seconds`, but once a pending intent exists or a pending order cannot be placed because it
+is too close to the current price, the runtime must switch that intent to tick-level monitoring.
+
+Default runtime config:
+
+```ini
+[runtime]
+refresh_seconds = 60
+pending_monitor_mode = tick
+tick_poll_interval_ms = 250
+
+[orders]
+pending_too_close_policy = wait_until_valid_or_market_if_triggered
+market_if_pending_triggered = true
+pending_reprice_to_min_distance = false
+pending_retry_on_invalid_price = true
+max_market_conversion_chase_points =
+```
+
+`refresh_seconds` is for signal scans and status cycles. It is not allowed to be the only mechanism
+that decides whether an armed pending entry has been reached.
+
+Before placing a pending order, fetch `symbol_info_tick()` and `symbol_info()` and validate broker
+minimum distance:
+
+```text
+min_distance_points = max(symbol.trade_stops_level, symbol.trade_freeze_level) + buffer
+min_distance_price  = min_distance_points * symbol.point
+```
+
+Then apply the trigger-side logic:
+
+```text
+BUY_STOP  already triggered if tick.ask >= adjusted_entry
+SELL_STOP already triggered if tick.bid <= adjusted_entry
+BUY_LIMIT already triggered if tick.ask <= adjusted_entry
+SELL_LIMIT already triggered if tick.bid >= adjusted_entry
+
+BUY_STOP  is placeable only if adjusted_entry > tick.ask + min_distance_price
+SELL_STOP is placeable only if adjusted_entry < tick.bid - min_distance_price
+BUY_LIMIT is placeable only if adjusted_entry < tick.ask - min_distance_price
+SELL_LIMIT is placeable only if adjusted_entry > tick.bid + min_distance_price
+```
+
+If the entry is already triggered before the pending order is accepted, do **not** keep trying to
+place the pending order. Convert the same signal intent to a market order:
+
+```text
+BUY_STOP triggered  -> send market BUY at current tick.ask
+SELL_STOP triggered -> send market SELL at current tick.bid
+BUY_LIMIT triggered -> send market BUY at current tick.ask
+SELL_LIMIT triggered -> send market SELL at current tick.bid
+```
+
+If the order is not triggered but is inside the broker minimum-distance band, do not blindly retry
+every minute and do not silently move the entry level. Keep the same intent in
+`armed_trigger_watch` and poll ticks until one of these happens:
+
+1. trigger side reaches the adjusted entry -> convert to market if `market_if_pending_triggered=true`;
+2. price moves away enough that the original adjusted entry becomes placeable -> place the pending
+   order at the original adjusted entry;
+3. signal expires -> abandon the intent and record `expired_without_place`;
+4. broker/order state becomes unknown -> quarantine/manual review; do not duplicate.
+
+If `order_send()` for a pending order returns invalid stops, invalid price, price changed or requote,
+immediately fetch a fresh tick and run the same state machine. Repeated failures must update the
+same `intent_id`; they must not create duplicate signal keys or duplicate order intents. Market
+conversion must recalculate lots from the actual executable market entry, current spread, SL/TP and
+slippage policy before sending. A `max_market_conversion_chase_points` guard should block unlimited
+chasing after a violent breakout.
 
 ## Runtime Safety Gates
 
@@ -367,7 +465,8 @@ include_commission_in_risk = true
 commission_per_lot_round_turn_usd = 7.0
 commission_free_symbols = XAUUSD,BTCUSD
 include_spread_in_risk = true
-spread_source = fixed_points
+spread_source = mt5_tick
+spread_fallback_source = fixed_points
 include_slippage_in_risk = true
 slippage_points_entry = 0
 slippage_points_exit = 0
@@ -391,6 +490,11 @@ max_positions_total = 1
 max_positions_per_symbol = 1
 max_new_orders_per_cycle = 1
 refresh_seconds = 60
+pending_monitor_mode = tick
+tick_poll_interval_ms = 250
+pending_too_close_policy = wait_until_valid_or_market_if_triggered
+market_if_pending_triggered = true
+pending_reprice_to_min_distance = false
 log_dir = .\logs
 terminal_path =
 magic_number =
@@ -415,7 +519,8 @@ include_commission_in_risk = true
 commission_per_lot_round_turn_usd = 7.0
 commission_free_symbols = XAUUSD,BTCUSD
 include_spread_in_risk = true
-spread_source = fixed_points
+spread_source = mt5_tick
+spread_fallback_source = fixed_points
 include_slippage_in_risk = true
 slippage_points_entry = 0
 slippage_points_exit = 0
@@ -439,6 +544,11 @@ max_positions_total = 1
 max_positions_per_symbol = 1
 max_new_orders_per_cycle = 1
 refresh_seconds = 60
+pending_monitor_mode = tick
+tick_poll_interval_ms = 250
+pending_too_close_policy = wait_until_valid_or_market_if_triggered
+market_if_pending_triggered = true
+pending_reprice_to_min_distance = false
 log_dir = .\logs
 data_cache_dir = .\data_cache
 terminal_path =

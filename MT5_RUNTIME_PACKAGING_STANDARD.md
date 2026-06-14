@@ -100,7 +100,8 @@ caches, local test configs, or machine-specific files as the operator copy folde
 
 - identity: `strategy_id`, `runtime_id`, `instance_name`, `magic_number`, `comment_prefix`,
   `mt5_comment_max_length`;
-- runtime: `mode`, `refresh_seconds`, `terminal_path`, `timezone`, `console_live_output`;
+- runtime: `mode`, `refresh_seconds`, `terminal_path`, `timezone`, `console_live_output`,
+  `pending_monitor_mode=tick`, and `tick_poll_interval_ms`;
 - runtime smoke: `run_mt5_smoke_on_build=false`, `expected_account_server`, `expected_login`,
   `print_account_magic_snapshot`, `write_account_magic_snapshot`,
   `require_trade_allowed_for_orders`, `require_zero_magic_positions_before_smoke`, and
@@ -116,13 +117,15 @@ caches, local test configs, or machine-specific files as the operator copy folde
   `spread_risk_accounting`;
 - pending-order management: `pending_expire_bars`, `pending_expire_minutes`,
   `cancel_stale_pending=true`, `signal_price_basis`, `pending_price_policy`,
-  `sltp_price_policy`, and side-specific bid/ask spread handling;
+  `sltp_price_policy`, side-specific bid/ask spread handling,
+  `pending_too_close_policy`, `market_if_pending_triggered`, and
+  `pending_reprice_to_min_distance=false`;
 - cost-inclusive sizing: `position_sizing_mode=cost_inclusive_risk_cash`,
   `include_commission_in_risk=true`, `commission_per_lot_round_turn_usd=7.0`,
   `commission_free_symbols=XAUUSD,BTCUSD`, `include_spread_in_risk=true`,
-  `spread_source`, `include_slippage_in_risk=true`, `slippage_points_entry`,
-  `slippage_points_exit`, `volume_rounding=floor_to_step`, and
-  `max_risk_overshoot_pct=0`;
+  `spread_source=mt5_tick`, `spread_fallback_source`, `fixed_spread_points_default`,
+  `include_slippage_in_risk=true`, `slippage_points_entry`, `slippage_points_exit`,
+  `volume_rounding=floor_to_step`, and `max_risk_overshoot_pct=0`;
 - pending-order price policy: `adjust_buy_pending_entry_for_spread=true`,
   `adjust_sell_pending_entry_for_spread=false`, `adjust_buy_sltp_for_spread=false`,
   `adjust_sell_sltp_for_spread=true`, and `reject_if_adjusted_sl_invalid`;
@@ -207,23 +210,45 @@ spread-risk-accounting mode for every attempted market/open entry.
 Pending order formulas must be declared in config and logged with both raw and adjusted levels.
 Do not hide spread handling in code.
 
+Spread is an explicit non-negative price distance:
+
+```text
+Primary live/order source:
+spread_price  = current tick.ask - current tick.bid
+spread_points = spread_price / symbol.point
+
+Fallback deterministic source:
+spread_price = configured fixed_spread_points_default * symbol.point
+```
+
+Order-capable demo/live-equivalent runtimes should default to `spread_source=mt5_tick` and read
+`symbol_info_tick(symbol).ask - symbol_info_tick(symbol).bid` at the order decision time. Fixed
+spread points or symbol overrides are allowed only when explicitly selected in config for
+deterministic dry-run/backtest diagnostics. Every order journal row must log spread source, bid,
+ask, point, spread points, spread price, tick timestamp, and whether the value affected price
+conversion, risk accounting, or both.
+
 Default bid-chart to MT5 bid/ask policy:
 
 ```text
 pending_price_policy = broker_bidask_from_bid_chart
 sltp_price_policy    = broker_bidask_from_bid_chart
 signal_price_basis   = bid_chart
+spread_price_source  = mt5_tick
 
-BUY_STOP / BUY_LIMIT   pending_entry = raw_entry + spread_price
-SELL_STOP / SELL_LIMIT pending_entry = raw_entry
+BUY_STOP / BUY_LIMIT   pending_entry = raw_entry + spread_price   # ADD spread_price
+SELL_STOP / SELL_LIMIT pending_entry = raw_entry                  # ADD nothing, SUBTRACT nothing
 
-BUY  position sl/tp = raw_sl / raw_tp
-SELL position sl/tp = raw_sl + spread_price / raw_tp + spread_price
+BUY  position sl/tp = raw_sl / raw_tp                             # ADD nothing, SUBTRACT nothing
+SELL position sl/tp = raw_sl + spread_price / raw_tp + spread_price # ADD spread_price
 ```
 
 For default MT5 bid-chart levels, BUY pending entries trigger on Ask, SELL pending entries trigger
 on Bid, BUY position SL/TP closes on Bid, and SELL position SL/TP closes on Ask. Do not use a
-symmetric "entry plus/minus spread, SL plus/minus spread" shortcut.
+symmetric "entry plus/minus spread, SL plus/minus spread" shortcut. Under this default
+`signal_price_basis=bid_chart` policy there is no "subtract spread" case. Any ask-chart,
+mid-price, or already-executable price basis must declare a different `signal_price_basis` and an
+audited conversion table.
 
 Required config:
 
@@ -232,6 +257,7 @@ Required config:
 signal_price_basis = bid_chart
 pending_price_policy = broker_bidask_from_bid_chart
 sltp_price_policy = broker_bidask_from_bid_chart
+spread_price_source = mt5_tick
 adjust_buy_pending_entry_for_spread = true
 adjust_sell_pending_entry_for_spread = false
 adjust_buy_sltp_for_spread = false
@@ -247,6 +273,59 @@ policy only and must not be the default for order-capable MT5 packages.
 After adjustment, the runtime must validate long SL below entry, short SL above entry,
 broker stops level, minimum pending distance, tick size rounding, and lot-step risk impact.
 Invalid adjusted levels are order blockers.
+
+### Pending Too-Close And Tick-Level Trigger Handling
+
+`refresh_seconds` may control closed-bar signal scans and operator status refreshes, but it must not
+be the only loop that manages an armed pending entry. Once a pending intent exists, or a pending
+order cannot be placed because it is too close to the current price, the runtime must use a
+tick-level monitor:
+
+```ini
+[runtime]
+refresh_seconds = 60
+pending_monitor_mode = tick
+tick_poll_interval_ms = 250
+
+[orders]
+pending_too_close_policy = wait_until_valid_or_market_if_triggered
+market_if_pending_triggered = true
+pending_reprice_to_min_distance = false
+pending_retry_on_invalid_price = true
+max_market_conversion_chase_points =
+```
+
+Before placing a pending order, fetch `symbol_info_tick()` and `symbol_info()` and calculate:
+
+```text
+min_distance_points = max(symbol.trade_stops_level, symbol.trade_freeze_level) + buffer
+min_distance_price  = min_distance_points * symbol.point
+```
+
+Trigger-side state machine:
+
+```text
+BUY_STOP  already triggered if tick.ask >= adjusted_entry
+SELL_STOP already triggered if tick.bid <= adjusted_entry
+BUY_LIMIT already triggered if tick.ask <= adjusted_entry
+SELL_LIMIT already triggered if tick.bid >= adjusted_entry
+
+BUY_STOP  is placeable only if adjusted_entry > tick.ask + min_distance_price
+SELL_STOP is placeable only if adjusted_entry < tick.bid - min_distance_price
+BUY_LIMIT is placeable only if adjusted_entry < tick.ask - min_distance_price
+SELL_LIMIT is placeable only if adjusted_entry > tick.bid + min_distance_price
+```
+
+If the entry has already been triggered before a pending order is accepted, the runtime must stop
+trying to place that pending order and convert the same signal intent to a market order: BUY at
+current `tick.ask`, SELL at current `tick.bid`. If the price is not yet triggered but is inside the
+minimum-distance band, keep the same `intent_id` in `armed_trigger_watch`, poll ticks until the
+original adjusted entry becomes placeable or triggered, and abandon only when the signal expires.
+Do not silently move the entry to the broker minimum distance unless an explicit audited policy
+enables repricing. On invalid-stops/invalid-price/price-changed/requote retcodes, immediately
+refresh the tick and run the same state machine. Market conversion must recalculate lots from the
+actual executable market entry, current spread, SL/TP and slippage policy, and should enforce a
+`max_market_conversion_chase_points` guard to avoid unlimited breakout chasing.
 
 ## MT5 Portability
 

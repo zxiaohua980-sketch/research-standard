@@ -439,6 +439,7 @@ def main() -> int:
         "commission_free_symbols",
         "include_spread_in_risk",
         "spread_source",
+        "fixed_spread_points_default",
         "include_slippage_in_risk",
         "slippage_points_entry",
         "slippage_points_exit",
@@ -465,6 +466,47 @@ def main() -> int:
             "position sizing config includes commission/spread/slippage risk denominator"
             if not missing_cost_risk
             else "missing " + ", ".join(missing_cost_risk)
+        ),
+    )
+    spread_source = (config_value(config_text, "spread_source") or "").lower()
+    spread_price_source = (config_value(config_text, "spread_price_source") or "").lower()
+    fixed_spread_default = config_value(config_text, "fixed_spread_points_default")
+    has_symbol_spread_override = re.search(r"^\s*spread_points_[A-Za-z0-9_.-]+\s*=", config_text, re.I | re.M) is not None
+    valid_spread_sources = {"mt5_tick", "fixed_points", "symbol_override", "same_as_risk"}
+    spread_source_config_ok = (
+        spread_source in valid_spread_sources
+        and (not spread_price_source or spread_price_source in valid_spread_sources)
+        and (
+            spread_source != "fixed_points"
+            or bool((fixed_spread_default or "").strip())
+            or has_symbol_spread_override
+        )
+    )
+    mt5_tick_spread_markers = [
+        "spread_price_from_tick",
+        "symbol_info_tick",
+        ".ask",
+        ".bid",
+        "ask - bid",
+        "tick.ask - tick.bid",
+    ]
+    spread_source_code_ok = (
+        not can_send_orders
+        or spread_source != "mt5_tick"
+        or contains_any(executor_text + config_text, mt5_tick_spread_markers)
+    )
+    result(
+        rows,
+        "PASS" if (not can_send_orders or (spread_source_config_ok and spread_source_code_ok)) else "FAIL",
+        "explicit_spread_source_and_sign",
+        (
+            "spread source is explicit; mt5_tick means symbol_info_tick().ask - symbol_info_tick().bid; fixed spreads are config-keyed"
+            if spread_source_config_ok and spread_source_code_ok
+            else (
+                "spread_source=mt5_tick needs symbol_info_tick bid/ask spread code"
+                if spread_source_config_ok and not spread_source_code_ok
+                else "missing/invalid spread_source, spread_price_source, or fixed_spread_points_default/symbol override"
+            )
         ),
     )
     market_entry_keys = [
@@ -518,6 +560,7 @@ def main() -> int:
         "pending_price_policy",
         "sltp_price_policy",
         "signal_price_basis",
+        "spread_price_source",
         "adjust_buy_pending_entry_for_spread",
         "adjust_sell_pending_entry_for_spread",
         "adjust_buy_sltp_for_spread",
@@ -558,6 +601,43 @@ def main() -> int:
                 "conservative_full_spread is legacy/testing only, not default MT5 order policy"
                 if legacy_conservative_policy
                 else "missing " + ", ".join(missing_pending_price)
+            )
+        ),
+    )
+    pending_tick_keys = [
+        "pending_monitor_mode",
+        "tick_poll_interval_ms",
+        "pending_too_close_policy",
+        "market_if_pending_triggered",
+        "pending_reprice_to_min_distance",
+    ]
+    missing_pending_tick = [key for key in pending_tick_keys if not config_has_key(config_text, key)]
+    pending_tick_markers = [
+        "trade_stops_level",
+        "trade_freeze_level",
+        "pending_entry_state_from_tick",
+        "armed_trigger_watch",
+        "market_if_pending_triggered",
+        "tick_poll_interval_ms",
+        "invalid_stops",
+        "invalid price",
+        "price_changed",
+        "requote",
+    ]
+    result(
+        rows,
+        "PASS" if (
+            not can_send_orders
+            or (not missing_pending_tick and contains_any(executor_text + config_text, pending_tick_markers))
+        ) else "FAIL",
+        "pending_too_close_tick_monitor",
+        (
+            "pending too-close handling uses tick-level watch and market conversion when trigger side already crossed"
+            if not missing_pending_tick and contains_any(executor_text + config_text, pending_tick_markers)
+            else (
+                "missing pending too-close/tick-level code markers"
+                if not missing_pending_tick
+                else "missing " + ", ".join(missing_pending_tick)
             )
         ),
     )

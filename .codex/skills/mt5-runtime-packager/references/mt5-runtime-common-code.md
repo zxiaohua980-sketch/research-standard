@@ -18,7 +18,10 @@ The module includes:
 - `zigzag_points_from_ohlc(rows_old_to_new, point_size, depth=12, deviation=5, backstep=3, tick_size=...)`
 - `DemoTradeGates`
 - `market_entry_price_from_tick(...)`
+- `spread_price_from_tick(...)`
 - `bid_chart_to_mt5_order_prices(...)`
+- `min_pending_distance_from_symbol_info(...)`
+- `pending_entry_state_from_tick(...)`
 - `send_market_order_once(...)`
 - `close_position_once(...)`
 - `magic_positions(...)` and `magic_orders(...)`
@@ -87,14 +90,21 @@ distance.
 For MT5 bid-chart raw levels:
 
 ```text
-BUY_STOP / BUY_LIMIT   entry = raw_entry + spread
+spread_price = symbol_info_tick(symbol).ask - symbol_info_tick(symbol).bid
+```
+
+If config uses fixed points for deterministic diagnostics, convert them explicitly:
+`spread_price = fixed_spread_points * symbol.point`. Log the source in either case.
+
+```text
+BUY_STOP / BUY_LIMIT   entry = raw_entry + spread_price
 SELL_STOP / SELL_LIMIT entry = raw_entry
 
 BUY  SL = raw_sl
 BUY  TP = raw_tp
 
-SELL SL = raw_sl + spread
-SELL TP = raw_tp + spread
+SELL SL = raw_sl + spread_price
+SELL TP = raw_tp + spread_price
 ```
 
 Use the helper:
@@ -113,7 +123,57 @@ prices = bid_chart_to_mt5_order_prices(
 ```
 
 Do not use a symmetric add/subtract rule. Buy pending entries trigger on Ask; sell pending entries
-trigger on Bid. BUY SL/TP closes on Bid; SELL SL/TP closes on Ask.
+trigger on Bid. BUY SL/TP closes on Bid; SELL SL/TP closes on Ask. Under the default
+`signal_price_basis=bid_chart` policy there is no subtract-spread case.
+
+## Pending Too-Close / Already-Triggered Pattern
+
+Do not manage pending entries only once per minute. Use the bar/closed-candle loop to create the
+signal, then manage the resulting pending intent with a tick-level loop:
+
+```python
+spread_price, spread_audit = spread_price_from_tick(mt5, symbol)
+prices = bid_chart_to_mt5_order_prices(
+    side="BUY",
+    entry_execution_mode="pending",
+    raw_entry=raw_entry,
+    raw_sl=raw_sl,
+    raw_tp=raw_tp,
+    spread_price=spread_price,
+)
+
+info = mt5.symbol_info(symbol)
+tick = mt5.symbol_info_tick(symbol)
+min_distance_price, distance_audit = min_pending_distance_from_symbol_info(
+    info,
+    buffer_points=config.min_pending_distance_points_buffer,
+)
+state = pending_entry_state_from_tick(
+    order_type="BUY_STOP",
+    adjusted_entry=prices["adjusted_entry"],
+    tick_bid=tick.bid,
+    tick_ask=tick.ask,
+    min_distance_price=min_distance_price,
+)
+
+if state["action"] == "convert_to_market":
+    # Same signal/intent id; do not create a duplicate.
+    # Recalculate lots from actual market entry, current spread, SL/TP and slippage before send.
+    send_market_buy()
+elif state["action"] == "place_pending":
+    send_buy_stop_at_original_adjusted_entry()
+else:
+    # armed_trigger_watch: poll symbol_info_tick() on tick_poll_interval_ms until
+    # triggered, placeable, expired, or quarantined.
+    keep_watching_same_intent()
+```
+
+For a BUY_STOP, convert to market BUY when `tick.ask >= adjusted_entry`. For a SELL_STOP, convert
+to market SELL when `tick.bid <= adjusted_entry`. For BUY_LIMIT and SELL_LIMIT use Ask/Bid
+respectively in the opposite direction. If a pending `order_send()` fails with invalid stops,
+invalid price, price changed or requote, fetch a fresh tick immediately and run the same state
+machine. Do not silently reprice to the broker minimum distance unless config explicitly enables
+that behavior.
 
 ## MT5 Account/Magic State Pattern
 

@@ -89,6 +89,33 @@ def find_portable_deliverables(root: Path) -> list[Path]:
     return sorted(set(path.resolve() for path in candidates), key=str)
 
 
+def is_relative_to(path: Path, parent: Path) -> bool:
+    try:
+        path.resolve().relative_to(parent.resolve())
+        return True
+    except ValueError:
+        return False
+
+
+def find_post_package_smoke_reports(root: Path, portable_dirs: list[Path]) -> list[Path]:
+    report_names = {
+        "post_package_smoke_report.json",
+        "post_package_log_check_report.json",
+        "runtime_smoke_report.json",
+        "portable_smoke_report.json",
+        "smoke_log_check_report.json",
+        "log_check_report.json",
+    }
+    reports: list[Path] = []
+    for path in root.rglob("*"):
+        if not path.is_file() or path.name.lower() not in report_names:
+            continue
+        if any(is_relative_to(path, portable_dir) for portable_dir in portable_dirs):
+            continue
+        reports.append(path)
+    return sorted(reports, key=str)
+
+
 def scan_text_for_local_paths(root: Path) -> list[str]:
     matches: list[str] = []
     for path in root.rglob("*"):
@@ -172,6 +199,12 @@ def portable_operator_shape(root: Path) -> tuple[bool, str]:
     forbidden = portable_artifact_hits(root)
     if forbidden:
         details.append("forbidden operator artifacts: " + ", ".join(forbidden[:8]))
+
+    allowed_top_level = {"config.ini", "logs", "data_cache"}
+    allowed_top_level.update(path.name for path in exe_files)
+    extras = [item.name for item in root.iterdir() if item.name not in allowed_top_level]
+    if extras:
+        details.append("unexpected top-level operator files/dirs: " + ", ".join(sorted(extras)[:8]))
 
     return not details, "; ".join(details) if details else "one EXE + config.ini + empty logs + optional empty data_cache"
 
@@ -864,6 +897,17 @@ def main() -> int:
         "; ".join(str(path) for path in portable_dirs) if portable_dirs else str(root / "portable"),
     )
     if portable_dirs:
+        smoke_reports = find_post_package_smoke_reports(root, portable_dirs)
+        result(
+            rows,
+            "PASS" if smoke_reports else "FAIL",
+            "post_package_exe_smoke_log_check_evidence",
+            (
+                "; ".join(str(path.relative_to(root)) for path in smoke_reports[:5])
+                if smoke_reports
+                else "missing smoke/log-check report outside operator folder"
+            ),
+        )
         all_have_config = all((path / "config.ini").exists() for path in portable_dirs)
         all_have_exe = all(any(path.glob("*.exe")) for path in portable_dirs)
         result(

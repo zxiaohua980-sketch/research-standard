@@ -127,6 +127,20 @@ local test configs
 Recommended docs and hash evidence may be kept in a build/audit folder outside the operator
 deliverable unless the user explicitly asks to include them.
 
+## Immediate EXE Smoke And Log Check
+
+After creating the operator folder, run the EXE immediately from that folder or an exact temporary
+copy. Then inspect logs before handoff:
+
+```powershell
+.\package\runtime.exe
+python .\scripts\check_runtime_logs_for_errors.py .\package --report .\post_package_log_check_report.json
+```
+
+If the log checker reports any fatal/error/traceback/exception evidence, do not ship the package.
+Keep `post_package_log_check_report.json` outside the operator folder. After smoke passes, clean
+delivery `logs\` and optional `data_cache\` back to empty.
+
 ## Safety Review Questions
 
 Answer before declaring the package ready:
@@ -138,22 +152,26 @@ Answer before declaring the package ready:
 5. Is the terminal/data path auto-discovered or externally configured?
 6. Does the final operator folder contain exactly one runnable EXE, beside-EXE `config.ini`, and
    empty `logs\`?
-7. Does order sending reconcile retcode against account state?
-8. Are monitor rows marked not forward-live and not performance evidence?
-9. Does startup reconcile existing positions before new signal handling?
-10. Does startup scan pending orders with `orders_get()`?
-11. Does startup scan recent order/deal history with `history_orders_get()` or `history_deals_get()`?
-12. Does the runtime persist order intents and quarantine unknown state instead of blindly retrying?
-13. Are order intents persisted atomically with SQLite transaction or temp-file + fsync + `os.replace()`?
-14. Is the history query window configurable, for example `recovery_lookback_days`?
-15. Does reconciliation treat MT5 broker state as authoritative and local intents as context?
-16. Does matching use ticket/order/deal id as the primary key, with magic/symbol/comment only as validation?
-17. Does SL/TP confirmation use tick/point tolerance instead of exact float equality?
-18. Does close confirmation distinguish full close from partial close?
-19. Does startup distinguish process-crash recovery from MT5 unavailable/network-disconnected recovery?
-20. Are `magic_number`, `comment_prefix`, `strategy_id`, and environment/runtime identity external config values?
-21. Is the MT5 comment short enough for broker truncation limits while still carrying a unique short intent id?
-22. Is the post-send confirmation polling window explicitly configured?
-23. Are quarantine release conditions explicit and auditable?
-24. Does `logs/startup_report.csv` append one row per startup before signal scanning?
-25. Does the monitor persist a signal execution ledger so the same completed signal bar cannot reopen after SL/TP closes the first position or after a runtime restart?
+7. Was the final EXE run immediately after packaging?
+8. Did `check_runtime_logs_for_errors.py` or an equivalent scanner confirm no fatal/error logs?
+9. Is smoke/log-check evidence stored outside the operator folder?
+10. Were delivery `logs\` and optional `data_cache\` reset to empty after smoke?
+11. Does order sending reconcile retcode against account state?
+12. Are monitor rows marked not forward-live and not performance evidence?
+13. Does startup reconcile existing positions before new signal handling?
+14. Does startup scan pending orders with `orders_get()`?
+15. Does startup scan recent order/deal history with `history_orders_get()` or `history_deals_get()`?
+16. Does the runtime persist order intents and quarantine unknown state instead of blindly retrying?
+17. Are order intents persisted atomically with SQLite transaction or temp-file + fsync + `os.replace()`?
+18. Is the history query window configurable, for example `recovery_lookback_days`?
+19. Does reconciliation treat MT5 broker state as authoritative and local intents as context?
+20. Does matching use ticket/order/deal id as the primary key, with magic/symbol/comment only as validation?
+21. Does SL/TP confirmation use tick/point tolerance instead of exact float equality?
+22. Does close confirmation distinguish full close from partial close?
+23. Does startup distinguish process-crash recovery from MT5 unavailable/network-disconnected recovery?
+24. Are `magic_number`, `comment_prefix`, `strategy_id`, and environment/runtime identity external config values?
+25. Is the MT5 comment short enough for broker truncation limits while still carrying a unique short intent id?
+26. Is the post-send confirmation polling window explicitly configured?
+27. Are quarantine release conditions explicit and auditable?
+28. Does `logs/startup_report.csv` append one row per startup before signal scanning?
+29. Does the monitor persist a signal execution ledger so the same completed signal bar cannot reopen after SL/TP closes the first position or after a runtime restart?

@@ -85,6 +85,12 @@ If a build creates many BAT files, that folder is not the operator deliverable. 
 minimal `portable\<package_name>\` or `release\<package_name>\` folder and copy only the approved
 operator artifacts into it.
 
+After a real package is built for handoff, immediately run the final EXE from the operator folder
+or from an exact copy of it. Inspect the generated `logs\` for fatal startup logs, non-empty error
+logs, tracebacks, exceptions, or CRITICAL/ERROR/FATAL lines. A package that starts but writes error
+logs is still `runtime_blocked`. Save smoke/log-check evidence outside the operator folder, then
+reset delivery `logs\` and optional `data_cache\` back to empty before handoff.
+
 Do not deliver source folders, PyInstaller `build`, `.spec`, historical logs, historical
 caches, local test configs, or machine-specific files as the operator copy folder.
 
@@ -291,7 +297,12 @@ Required runtime smoke sequence, only when explicitly running the runtime:
 3. print/log the account and magic-number snapshot;
 4. verify visible identity header, logs/cache creation, cache update, startup reconciliation, and
    at least one monitor cycle;
-5. for DEMO order smoke, confirm open/modify/close by broker state and then restore safe defaults.
+5. inspect generated logs for fatal/error/traceback/exception signals;
+6. for DEMO order smoke, confirm open/modify/close by broker state and then restore safe defaults.
+
+For package handoff, the packaged EXE smoke and log check are mandatory. They may be run from a
+temporary copy of the operator folder to keep the final delivery folder clean. If logs contain
+errors, do not ship the package.
 
 `build_exe.bat` should call a local preflight script before PyInstaller and fail immediately
 on missing config fields, path leaks, missing risk/order code paths, or audit FAIL. It should not
@@ -358,6 +369,8 @@ A package cannot be called `portable_package_ready` unless:
 - the final operator folder contains no `.bat`, `.cmd`, `.ps1`, `.py`, `.spec`, source/build
   artifacts, historical logs, historical caches, or local test configs;
 - final EXE direct launch was tested when a runtime smoke was requested or required for handoff;
+- generated logs from the immediate final EXE smoke were inspected and contained no fatal/error,
+  traceback, exception, or non-empty error-log evidence;
 - console shows dynamic cycle output during runtime smoke;
 - outputs are written under the portable folder;
 - MT5 path discovery works without developer-machine absolute paths;
@@ -368,6 +381,8 @@ A package cannot be called `portable_package_ready` unless:
   not retcode alone;
 - the deliverable copy folder is the minimal operator package, not `build`, `dist`, source root,
   or a folder full of helper BAT files.
+- smoke/log-check evidence is stored outside the final operator folder, and delivery `logs\` and
+  optional `data_cache\` are empty at handoff.
 
 ## Evidence Labels
 

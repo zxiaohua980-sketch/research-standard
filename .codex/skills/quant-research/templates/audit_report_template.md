@@ -8,6 +8,8 @@
 - generated_at:
 - git_commit:
 - version_root:
+- active_py_file:
+- context_reset_status:
 - read_only: true
 - strict_audit_mode: yes/no
 - strict_audit_report_ref:
@@ -49,6 +51,8 @@
 - session/timezone:
 - data split ledger:
 - version folder isolation:
+- active `.py` copied for new version:
+- file hygiene / cleanup:
 - survivorship/missing rows:
 - output required fields:
 - batch_vs_incremental_replay:

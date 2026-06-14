@@ -1,0 +1,44 @@
+# Cleanup Log
+
+- strategy_id:
+- version:
+- version_root:
+- cleanup_at:
+- operator:
+- cleanup_scope:
+
+## Deleted Obvious Temporary Files
+
+| path | reason | evidence_impact |
+|------|--------|-----------------|
+| | __pycache__/tmp/partial/debug/duplicate | none |
+
+## Moved To Trash Review
+
+| original_path | trash_review_path | reason_uncertain | review_needed_by |
+|---------------|-------------------|------------------|------------------|
+| | | | |
+
+## Preserved Evidence
+
+Confirm these were not deleted:
+
+- [ ] raw market data snapshots
+- [ ] data ledgers
+- [ ] version manifests / version.json
+- [ ] audit reports
+- [ ] replay reports
+- [ ] attribution reports
+- [ ] frozen/forward-live logs
+- [ ] runtime order/reconciliation logs
+- [ ] user-provided source files
+
+## Result
+
+```text
+cleanup_status: PASS | NEEDS_REVIEW
+```
+
+- formal_inputs_still_under_version_root:
+- formal_outputs_still_under_version_root:
+- loose_latest_final_copy_saved_runs_remaining:

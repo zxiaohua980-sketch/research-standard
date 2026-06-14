@@ -60,6 +60,43 @@ MT5 bar_close_time = next_bar_open_time
 
 ---
 
+## 🧬 开启新版本三件套
+
+Phase 2+ 一旦开启新版本，必须先做：
+
+1. **新目录**：`versions/<new_version>/`
+2. **新 py 文件**：复制父版本 active `.py` 到新目录，例如 `src/strategy_v0_2.py`
+3. **新上下文**：新建 Codex thread/对话；如果不能新建，写 `NEW_VERSION_HANDOFF.md` 并从它重启上下文
+
+然后：
+
+- 先审计 copied baseline；
+- 再修改逻辑；
+- 结束时清理临时/无效文件；
+- 写 `CLEANUP_LOG.md`。
+
+禁止：直接在父版本 `.py` 上改，或用旧版本长对话记忆当成当前版本事实。
+
+---
+
+## 🧹 文件清理规则
+
+及时删除：
+- `__pycache__`、`.pyc`、`.tmp`、半截输出；
+- debug dump、临时 CSV/JSON/HTML/MD；
+- 未绑定 version/root/hash 的 `latest/final/new/copy/副本/saved_runs`；
+- 已汇总进报告的重复临时图表和日志。
+
+不要乱删：
+- 原始市场数据、ledger、manifest；
+- audit/replay/attribution 报告；
+- frozen、forward-live、runtime 订单/对账日志；
+- 用户提供的源文件和 registry 记录。
+
+不确定：移动到 `versions/<version>/_trash_review/<timestamp>/`，再写 `CLEANUP_LOG.md`。
+
+---
+
 ## 📅 典型开发时间表
 
 ```
@@ -169,6 +206,8 @@ config.yaml            ← 参数配置
 .gitignore             ← 排除输出文件
 version.json           ← 版本记录
 version_manifest.yaml  ← Phase 2+ 版本根目录记录
+NEW_VERSION_HANDOFF.md ← Phase 2+ 新版本上下文入口
+CLEANUP_LOG.md         ← Phase 2+ 临时/无效文件清理记录
 README.md              ← 项目文档
 ```
 
@@ -233,6 +272,8 @@ Phase 3: source_preflight_last.json + runtime_audit_report.md + EXE/config hashe
 | MTF 未来函数 | 普通回测和逐根回测差距巨大 | 检查高周期 `available_at <= decision_time` |
 | pivot/swing 重绘 | 成品回测好、逐根消失 | 检查 `pivot_detect <= confirm <= signal` |
 | 跨版本读错文件 | 新版本结果解释不清 | 检查 `versions/<version>/` 和路径守卫 |
+| 旧版本上下文混乱 | 不知道当前改的是哪版 | 新建 thread，写 `NEW_VERSION_HANDOFF.md` |
+| 临时文件污染 | latest/final/copy 一堆 | 清理或移入 `_trash_review/`，写 `CLEANUP_LOG.md` |
 | 样本太小加 filter | 优化了但前向崩盘 | 要求 >= 30 笔样本 |
 | 环境不好删掉 | Sharpe 漂亮但现实失效 | 不要删，这是市场真相 |
 | 连亏就改 | 频繁改规则 | 等 30 笔再评估 |
@@ -252,6 +293,8 @@ Phase 3: source_preflight_last.json + runtime_audit_report.md + EXE/config hashe
 | **环境尊重** | 找出弱点，不要删除 |
 | **版本清晰** | commit hash 是真理 |
 | **目录隔离** | 一个版本，一个文件夹 |
+| **新版本三件套** | 新目录 + 新 py + 新 thread |
+| **文件清理** | 无效/临时文件及时删，不确定进 `_trash_review` |
 | **MTF 严格** | 高周期必须先完成再可用 |
 | **审计纯粹** | 查错时只修安全缺陷，不顺手优化 |
 | **冻结严格** | forward 中一个标点都不改 |

@@ -9,6 +9,8 @@
 2. 每个结果都能被重现
 3. 每个策略都能被追踪
 4. 每个版本都能被锁定
+5. 制度不拖垮研究效率：Phase 1 轻门禁，Phase 2 严格隔离，Phase 3 最严谨
+6. 无效、临时、半截文件及时清理，不污染下一轮研究
 
 ---
 
@@ -278,7 +280,7 @@
 ### 13. MTF_LOOKAHEAD_AND_VERSION_ISOLATION_STANDARD.md
 **多周期未来函数与版本文件夹隔离标准**
 
-定义 MTF `feature_available_at <= decision_time`、高周期 bar 可见性、逐根 MTF feature diff、一个版本一个文件夹、`version_manifest.yaml` 和跨版本路径隔离。
+定义 MTF `feature_available_at <= decision_time`、高周期 bar 可见性、逐根 MTF feature diff、一个版本一个文件夹、`version_manifest.yaml`、新版本复制父版本 active `.py`、新 thread/上下文重启、清理 `_trash_review` 和跨版本路径隔离。
 
 **何时使用**：任何多周期、resample、merge_asof、高周期 filter、逐根回测、版本目录、回测输出或跨版本对比任务必读。
 
@@ -314,6 +316,13 @@
 - 必读 STRICT_AUDIT_ENFORCEMENT_STANDARD.md（只审计，不优化）
 - 再读 MTF_LOOKAHEAD_AND_VERSION_ISOLATION_STANDARD.md（如果涉及多周期/结构确认）
 
+**要开启新版本**：
+- 新建 `versions/<new_version>/`
+- 复制父版本 active `.py` 为新版本独立 `.py`
+- 建立新 thread/上下文重启并写 `NEW_VERSION_HANDOFF.md`
+- 先重新审计 copied baseline，再改逻辑
+- 结束时清理临时/无效文件并写 `CLEANUP_LOG.md`
+
 **要做参数优化**：
 - 必读 OPTIMIZATION_POLICY.md（避免常见错误）
 
@@ -338,6 +347,9 @@
 | **Look-Ahead Bias** | 在回测中使用了未来数据的错误，必须在 Stage 2 Execution Audit 中检查 | 每个新回测、新数据源时检查 |
 | **MTF Timing Audit** | 证明高周期特征在低周期决策时已经完成且可见 | 任何多周期或重采样策略 |
 | **Version Root** | `versions/<version>/` 独立目录，隔离本版本代码、配置、输出、报告和缓存 | Phase 2+ 每个候选版本 |
+| **Active Py Copy** | 新版本必须复制父版本 active `.py` 为新版本单独文件 | Phase 2+ 新版本启动 |
+| **Context Reset** | 新版本用新 thread/对话或从 handoff 重启，避免旧版本上下文污染 | Phase 2+ 新版本启动 |
+| **Cleanup Log** | 记录删除/隔离的临时、无效、半截输出 | Phase 2+ 每轮结束/提交前 |
 | **Strict Audit Enforcement Mode** | 审计-only 模式，只允许最小安全补丁，禁止与性能优化混合 | 查未来函数、replay 差异、MTF/pivot/execution hardening |
 | **Overfitting** | 参数过度优化到特定历史数据，导致样本外性能急剧下降 | Stage 7 优化时严防，Stage 8 WF 评估 |
 

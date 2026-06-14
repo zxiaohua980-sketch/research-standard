@@ -15,7 +15,24 @@
 - 每个结果可以回溯到代码、配置、数据和时间；
 - 多周期特征只能使用决策当时已经完成且可见的数据；
 - 每个正式版本都有自己的文件夹，不能读取其他版本的回测数据和记录；
+- 临时、无效、半截输出能及时清理，不让文件垃圾污染下一轮研究；
 - 探索结果不会被误标为 OOS、forward-live 或可实盘证据。
+
+---
+
+## 分级门禁：研究效率优先
+
+制度必须围绕策略研究服务，不能把 Phase 3 的严谨度提前压到 Phase 1。默认分级：
+
+1. **Phase 1 轻门禁**：允许单文件快速写代码、快测、盈亏比测试和多维归因；不强制完整 registry、完整 ledger、完整报告。必须做到独立探索目录/文件、致命审计、证据降级和及时清理临时文件。
+2. **Phase 2 中高门禁**：有潜力的想法进入候选迭代后，必须新版本子目录、复制父版本 active `.py` 为新版本单独文件、重新审计、版本隔离、归因记录和必要的 manifest。中央 registry 只在里程碑更新，不记录每次小试错。
+3. **Phase 3 最高门禁**：冻结、逐根回测、Strict Audit Enforcement、runtime safety、EXE 打包、demo/dry-run 交付必须严格执行。
+
+如果治理动作会阻断 Phase 1 的快速研究，优先选择“继续探索但降级证据标签”，不要停止写代码、归因和优化。只有进入 Phase 2 决策级候选、冻结、OOS、forward-live 或 runtime handoff 时，才强制完整门禁。
+
+### 文件卫生原则
+
+每轮结束要清理临时文件、半截输出、debug dump、未绑定 version/root/hash 的 loose `latest/final/copy/副本/saved_runs`。Phase 1 可以简单删除明显垃圾；Phase 2+ 对不确定文件先放入当前 `version_root/_trash_review/<timestamp>/`，并在 `CLEANUP_LOG.md` 或报告 cleanup section 记录。不得删除原始数据、ledger、manifest、审计/归因/replay 报告、冻结版本、forward-live 日志或 runtime 订单/对账证据。
 
 ---
 
@@ -164,6 +181,10 @@ promote_to_candidate
 - 不是明显依赖少数大单；
 - 无明显致命审计问题。
 
+### Phase 1 清理要求
+
+Phase 1 结束一轮快测后，应删除明显临时文件和失败半截输出，只保留能支持下一轮归因的最小代码、配置、结果摘要和关键样本。清理不需要复杂审批，但不得删除用户原始资料、原始市场数据或仍需复核的证据文件。
+
 ---
 
 ## Phase 2: 成型后版本迭代阶段
@@ -202,6 +223,8 @@ next_action:
 ```text
 固定候选逻辑
 建立独立 version_root
+复制父版本 active .py 到新版本子目录
+重启 thread/上下文并写 handoff
 完整执行审计
 Strict Audit Enforcement Mode 修复所有 blocking safety defect
 多周期时间可用性审计（如适用）
@@ -215,6 +238,7 @@ Strict Audit Enforcement Mode 修复所有 blocking safety defect
 重新测试
 对比父版本
 保留、回滚、继续或放弃
+清理临时/无效输出并记录 CLEANUP_LOG
 ```
 
 每次主要改动只改一个逻辑族：
@@ -232,7 +256,10 @@ Strict Audit Enforcement Mode 修复所有 blocking safety defect
 
 - `version.json`；
 - `versions/<version>/version_manifest.yaml`；
+- 新版本专用 active `.py` 主文件；
+- `NEW_VERSION_HANDOFF.md` 或等价上下文入口；
 - `config.yaml` 或等价配置；
+- `CLEANUP_LOG.md` 或报告内 cleanup section；
 - `execution_audit.md`；
 - `mtf_timing_audit.md`（如果使用多周期）；
 - `version_isolation_check.json`；
@@ -286,7 +313,10 @@ strategy_root/
   versions/
     v0_1/
       version_manifest.yaml
+      NEW_VERSION_HANDOFF.md
+      CLEANUP_LOG.md
       src/
+        strategy_v0_1.py
       config/
       data/
       backtests/
@@ -294,9 +324,12 @@ strategy_root/
       reports/
       cache/
       logs/
+      _trash_review/
 ```
 
 所有正式 backtest/replay 输出必须写入当前 `versions/<version>/`。除带 hash 的只读市场数据快照外，当前版本不得读取其他版本的 `backtests/`、`reports/`、`cache/`、`trades.csv`、`signals.csv` 或 loose `saved_runs`。发现跨版本读取时，本轮结果降级为 `version_isolation_unverified / not decision-grade`，需要清理路径并重新运行。
+
+新版本必须从父版本复制 active `.py` 主文件到新子目录，形成新版本独立代码入口。允许引用只读稳定库，但禁止修改父版本 active `.py` 或从父版本输出目录读取数据。新版本开发应使用新 Codex thread/对话；如果无法新建 thread，必须以 `NEW_VERSION_HANDOFF.md` 作为上下文重启点，并标记 `context_contamination_risk`。
 
 ### Phase 2 结论
 
@@ -401,6 +434,9 @@ Demo runtime 日志不能当作 OOS-Final；只有冻结时间之后新产生的
 | 执行审计 | 致命审计 | 完整审计 | runtime 执行一致性审计 |
 | MTF 时间审计 | 致命审计 | 多周期策略强制 | 与冻结版本对齐 |
 | 版本文件夹隔离 | 建议 | 强制 | 继承冻结版本根目录 |
+| 新版本复制 active `.py` | 不强制 | 强制 | 只允许 runtime 适配，不改策略 |
+| 新 thread / 上下文重启 | 建议 | 新版本强制 | runtime handoff 强制 |
+| 临时文件清理 | 强制轻量 | 强制并记录 | 交付前强制清空历史日志/缓存 |
 | 盈亏比测试 | 强制 | 强制复核 | 不适用 |
 | 多维归因 | 强制 | 强制 | 不适用 |
 | 逐根回测 | 可选 | 冻结前强制，MTF 需 feature diff | runtime 对齐依据 |

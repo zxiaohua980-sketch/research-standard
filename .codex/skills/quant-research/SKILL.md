@@ -1,6 +1,6 @@
 ---
 name: quant-research
-description: Three-phase research operating system for MT5 and FX quantitative strategy work. Use when Codex works on exploratory alpha hypothesis testing, OHLC/tick backtests, strict audit enforcement, future-function/lookahead repair, multi-timeframe timing audits, pivot/swing/structure integrity, version-folder isolation, win-rate/RR testing, MFE/MAE attribution, strategy version iteration, bar-by-bar replay determinism, OOS/holdout governance, forward-live boundaries, or preparing a frozen candidate for MT5 dry-run/demo runtime packaging.
+description: Three-phase research operating system for MT5 and FX quantitative strategy work. Use when Codex works on exploratory alpha hypothesis testing, OHLC/tick backtests, strict audit enforcement, future-function/lookahead repair, multi-timeframe timing audits, pivot/swing/structure integrity, version-folder isolation, new-version active-Python-file copying, new thread/context reset for version iteration, temporary-file cleanup, win-rate/RR testing, MFE/MAE attribution, bar-by-bar replay determinism, OOS/holdout governance, forward-live boundaries, or preparing a frozen candidate for MT5 dry-run/demo runtime packaging.
 ---
 
 # Quant Research
@@ -12,6 +12,10 @@ Use this skill to move trading ideas through a phase-aware research pipeline:
 1. **Phase 1 - Quick exploration**: turn hypotheses into code, fatal-audit the obvious traps, run quick tests, RR tests, and multi-dimensional attribution. Results are exploratory only.
 2. **Phase 2 - Candidate iteration**: register promising ideas, isolate each version folder, audit execution/MTF timing, compare versions, perform attribution-driven changes, and require bar-by-bar replay before freeze.
 3. **Phase 3 - EXE/demo runtime handoff**: hand a frozen candidate to MT5 runtime packaging with dry-run/demo safety gates. REAL trading is out of scope.
+
+Keep the system research-first: Phase 1 should stay fast and lightly gated; Phase 2 should
+be version-isolated and auditable; Phase 3 should be strict. Do not turn registry or ledger
+work into busywork that blocks hypothesis coding, attribution, and iteration.
 
 Use **Strict Audit Enforcement Mode** whenever the task is audit, hardening, future-function
 repair, replay-difference investigation, candidate approval, MTF/pivot/execution safety, or
@@ -27,10 +31,15 @@ First read the nearest project `AGENTS.md`. If available, also read the strategy
 - If `AGENTS.md` conflicts with this skill, obey `AGENTS.md`.
 - If a strategy is unregistered, Phase 1 exploration can continue with `templates/idea_card_template.md`, but formal Phase 2+ research is blocked until a minimal registry record exists.
 - If a Phase 2+ version lacks its own `versions/<version>/` root and manifest, formal metrics are blocked as `version_isolation_unverified`.
+- If a Phase 2+ new version has not copied the parent active `.py` into its own version root, formal metrics are blocked as `active_py_not_isolated`.
+- If a Phase 2+ new version reused an old long conversation without a new thread or handoff restart, mark `context_contamination_risk`.
 - If a multi-timeframe strategy lacks MTF timing evidence, formal metrics are blocked as `mtf_timing_unverified`.
 - If an audit task has not satisfied Strict Audit Enforcement Mode, promotion/approval is blocked as `strict_audit_unverified`.
 - Do not touch frozen or forward-live strategy code in place.
 - Do not place REAL orders, enable REAL-account trading, or treat demo/runtime logs as OOS-Final evidence.
+- Clean temporary and invalid outputs promptly, but never delete raw data, manifests, audits,
+  frozen/forward logs, runtime order/reconciliation evidence, or user-supplied source files
+  without explicit approval and an archival note.
 
 ## Phase Classifier
 
@@ -102,24 +111,31 @@ Goal: find whether a profit mechanism may exist.
 8. Decide only: `keep_exploring`, `reject`, or `promote_to_candidate`.
 
 Phase 1 must not use locked final holdout and must not claim OOS, forward-live, or decision-grade validity.
+At the end of each quick iteration, delete obvious temporary files and failed partial outputs.
+Keep only the smallest code/config/result summary needed for the next attribution loop.
 
 ## Phase 2 Workflow
 
 Goal: turn a promising idea into an auditable candidate.
 
 1. Require minimal registry, `version.json`, and one isolated `versions/<version>/` root.
-2. Record Git state before formal runs.
-3. Freeze the candidate's current rules for a baseline.
-4. Run full execution audit before using metrics for decisions.
-5. For audit/hardening/approval tasks, apply Strict Audit Enforcement Mode before any optimization or promotion.
-6. If MTF/resampling/higher-timeframe features are used, run `templates/mtf_timing_audit_template.md` and block unless `feature_available_at <= decision_time` is proven.
-7. Run version isolation check before formal backtests; outputs must stay inside the active version root and mutable inputs must not come from sibling versions.
-8. Produce baseline results, RR platform analysis, and attribution.
-9. For any logic/risk/exit/sizing/cost change, write a bounded change proposal and create a new version or experiment branch.
-10. Re-audit after changes and compare parent vs child versions.
-11. Maintain data split discipline: discovery/development data can guide iteration; locked final holdout is opened once only after rules are fixed.
-12. Before freeze or runtime handoff, run bar-by-bar replay using `templates/bar_by_bar_replay_report_template.md`.
-13. Decide only: `continue_iteration`, `return_to_exploration`, `reject`, or `freeze_candidate`.
+2. When opening a new version, create a new subdirectory, copy the parent active `.py` into a
+   new standalone active `.py` file, and do not modify the parent active `.py`.
+3. Start a new thread/conversation for the child version; if unavailable, create
+   `NEW_VERSION_HANDOFF.md` and restart context from it, marking `context_contamination_risk`.
+4. Record Git state before formal runs.
+5. Freeze the copied baseline's current rules, then re-audit before changing logic.
+6. Run full execution audit before using metrics for decisions.
+7. For audit/hardening/approval tasks, apply Strict Audit Enforcement Mode before any optimization or promotion.
+8. If MTF/resampling/higher-timeframe features are used, run `templates/mtf_timing_audit_template.md` and block unless `feature_available_at <= decision_time` is proven.
+9. Run version isolation check before formal backtests; outputs must stay inside the active version root and mutable inputs must not come from sibling versions.
+10. Produce baseline results, RR platform analysis, and attribution.
+11. For any logic/risk/exit/sizing/cost change, write a bounded change proposal and create a new version or experiment branch.
+12. Re-audit after changes and compare parent vs child versions.
+13. Clean temporary/invalid outputs, move uncertain files to `_trash_review/`, and record `CLEANUP_LOG.md`.
+14. Maintain data split discipline: discovery/development data can guide iteration; locked final holdout is opened once only after rules are fixed.
+15. Before freeze or runtime handoff, run bar-by-bar replay using `templates/bar_by_bar_replay_report_template.md`.
+16. Decide only: `continue_iteration`, `return_to_exploration`, `reject`, or `freeze_candidate`.
 
 Bar-by-bar replay is mandatory before Phase 3. It must compare batch vs replay MTF features, signals, trades and equity, and explain every material difference.
 
@@ -140,9 +156,13 @@ Phase 3 validates runtime behavior, not strategy profitability. Demo/runtime log
 
 Apply gates by phase:
 
-- Phase 1: fatal audit and evidence label are mandatory; full registry/data ledger is not mandatory.
-- Phase 2: registry, Git/version identity, isolated version root, execution audit, MTF timing audit when applicable, attribution, data split discipline and bar-by-bar replay are mandatory.
-- Phase 3: frozen candidate handoff, runtime safety gates, REAL rejection and portable package audit are mandatory.
+- Phase 1: light gates only: fatal audit, evidence label, independent exploration file/folder,
+  and cleanup of obvious temporary outputs. Full registry/data ledger is not mandatory.
+- Phase 2: version gates: minimal registry milestone, Git/version identity, isolated version
+  root, copied active `.py`, context reset/handoff, execution audit, MTF timing audit when
+  applicable, attribution, cleanup log, data split discipline and bar-by-bar replay.
+- Phase 3: strict gates: frozen candidate handoff, strict audit clean status, runtime safety
+  gates, REAL rejection, portable package audit and clean deliverable folder.
 
 If a guard blocks formal research, do not stop all work automatically. Either downgrade to Phase 1 exploration with explicit labels or ask for the missing formal artifact when the user wants decision-grade output.
 
@@ -169,10 +189,12 @@ Use:
 
 - `templates/idea_card_template.md` for Phase 1 ideas.
 - `templates/quick_test_report_template.md` for Phase 1 quick tests and RR matrix.
+- `templates/new_version_handoff_template.md` when opening a Phase 2+ child version.
 - `templates/audit_report_template.md` for execution audits.
 - `templates/strict_audit_enforcement_report_template.md` for audit-only/minimal-patch reviews.
 - `templates/mtf_timing_audit_template.md` for multi-timeframe timing audits.
 - `templates/version_isolation_manifest_template.yaml` for Phase 2+ version roots.
+- `templates/cleanup_log_template.md` for Phase 2+ file hygiene.
 - `templates/logic_change_proposal_template.md` before formal Phase 2 rule changes.
 - `templates/strategy_report_template.md` for candidate reports.
 - `templates/bar_by_bar_replay_report_template.md` before freezing a candidate.
@@ -212,6 +234,8 @@ Phase 1:
 Phase 2:
 
 - registry/version/Git status;
+- active `.py` copy status;
+- context reset/new thread status;
 - audit status;
 - strict audit status if the task is audit/hardening/approval;
 - MTF timing audit status, if applicable;
@@ -219,6 +243,7 @@ Phase 2:
 - data evidence type;
 - attribution/change rationale;
 - bar-by-bar replay status when near freeze;
+- cleanup status;
 - whether code/parameters may change;
 - decision and next action.
 

@@ -257,6 +257,9 @@ Follow `MTF_LOOKAHEAD_AND_VERSION_ISOLATION_STANDARD.md`. In Strict Audit Enforc
 these are hard failures:
 
 - mixing old strategy versions;
+- opening a child version while continuing to edit the parent active `.py`;
+- missing child-version active `.py` copy;
+- missing new-thread/context-handoff record for a child version;
 - using external cache or loose `latest`, `final`, `copy`, `副本`, or `saved_runs`;
 - cross-run contamination of signals;
 - reusing historical outputs as live inputs;
@@ -264,6 +267,11 @@ these are hard failures:
 - writing formal outputs outside the active version root.
 
 All data must be bound to the active runtime/candidate version.
+
+Temporary and invalid files must be cleaned before an audit can be `PASS`: delete obvious
+temp/partial/debug outputs, move uncertain files to `_trash_review/`, and preserve
+`CLEANUP_LOG.md`. Cleanup must not delete raw data, ledgers, manifests, audit/replay reports,
+frozen/forward logs or runtime order/reconciliation evidence.
 
 ---
 
@@ -354,6 +362,7 @@ Report each category:
 - execution timing errors;
 - survivorship bias;
 - data/version contamination;
+- file hygiene / temporary output contamination;
 - cost model incompleteness, if applicable;
 - runtime safety failure, if applicable.
 

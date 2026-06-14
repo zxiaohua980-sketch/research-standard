@@ -8,6 +8,8 @@ This standard fixes two blocking risks in MT5/FX research:
    the lower-timeframe decision time;
 2. a strategy version may accidentally read another version's backtest data, reports, cache or
    records because files are loosely named or stored in shared output folders.
+3. a new version may accidentally continue editing the parent version's code or reuse the
+   parent conversation context, causing version and reasoning contamination.
 
 For Phase 2+ work, either risk makes the result non-decision-grade. A candidate cannot be
 frozen, handed to runtime packaging, or used for OOS/forward claims until both gates pass.
@@ -190,6 +192,15 @@ Every Phase 2+ candidate version must have its own version root. Backtest output
 audit files, caches and runtime handoff records from one version must not be used by another
 version's backtest engine.
 
+When opening a new Phase 2+ version:
+
+1. create a new `versions/<new_version>/` subdirectory;
+2. copy the parent version's active `.py` file into the new version as a new standalone file;
+3. write `NEW_VERSION_HANDOFF.md` or equivalent context entry;
+4. use a new Codex thread/conversation for the new version, or explicitly restart context from
+   the handoff and mark `context_contamination_risk`;
+5. re-audit the copied baseline before modifying the new version.
+
 Required structure:
 
 ```text
@@ -197,7 +208,10 @@ strategy_root/
   versions/
     v0_1/
       version_manifest.yaml
+      NEW_VERSION_HANDOFF.md
+      CLEANUP_LOG.md
       src/
+        strategy_v0_1.py
       config/
       data/
         input_manifest.yaml
@@ -208,6 +222,7 @@ strategy_root/
       cache/
       logs/
       comparisons/
+      _trash_review/
     v0_2/
       version_manifest.yaml
       ...
@@ -223,6 +238,7 @@ Allowed shared input:
 Forbidden cross-version input:
 
 - reading `versions/v0_1/backtests/` while running `versions/v0_2`;
+- editing the parent version's active `.py` when the intended work is a child version;
 - reading another version's `reports/`, `cache/`, `logs/`, `trades.csv` or `signals.csv` as a backtest input;
 - relying on loose names such as `latest.csv`, `final.csv`, `best.csv`, `new.csv`, `copy`, `副本`, or `saved_runs`;
 - hard-coding an absolute path to an older version's output;
@@ -259,15 +275,31 @@ forbidden_input_roots:
   - other_version_cache
   - loose_saved_runs
 output_root:
+active_py_file:
+parent_active_py_file_hash:
+new_version_handoff:
+context_reset_status:
 data_snapshot_hashes:
 batch_backtest_ref:
 bar_by_bar_replay_ref:
 mtf_timing_audit_ref:
 version_isolation_check_ref:
 evidence_label:
+cleanup_log_ref:
 ```
 
 If this manifest is missing for Phase 2+ work, the result is blocked from formal promotion.
+
+`context_reset_status` must be one of:
+
+```text
+new_thread
+context_restarted_from_handoff
+context_contamination_risk
+```
+
+`context_contamination_risk` is allowed for emergency continuation, but blocks freeze/runtime
+handoff until the version is re-audited from the handoff in a clean context.
 
 ---
 
@@ -293,6 +325,20 @@ not decision-grade
 
 Legacy projects do not need to be deleted. Keep old files as read-only historical evidence,
 then create a clean `versions/<new_version>/` folder for the next formal candidate.
+
+---
+
+## 7A. Cleanup Guard
+
+Phase 2+ runners and reports must not leave loose temporary outputs that can be mistaken for
+formal evidence. Before committing or comparing a version:
+
+- delete obvious temporary files (`__pycache__`, `.pyc`, `.tmp`, partial failed outputs, debug dumps);
+- move uncertain files to `version_root/_trash_review/<timestamp>/`;
+- record cleanup in `CLEANUP_LOG.md` or a report cleanup section;
+- never delete raw market data snapshots, ledgers, manifests, audit/replay/attribution reports,
+  frozen artifacts, forward-live logs, or runtime order/reconciliation evidence without explicit
+  user approval and an archival note.
 
 ---
 

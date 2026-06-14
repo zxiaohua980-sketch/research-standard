@@ -270,12 +270,18 @@ Any proposed change must have a change record before code is modified:
 1. Identify one problem from audited Stage 5 attribution.
 2. Propose one bounded rule family; do not combine several rescue changes.
 3. Create a new version or experiment branch before implementation.
-4. Implement the candidate with tests for timing, direction, sizing and collision handling.
-5. Repeat Stage 2 execution audit for the changed rule.
-6. Evaluate unchanged on development validation and document rejected as well as accepted candidates.
-7. Run Stage 7 parameter robustness only for an accepted rule, without reopening discarded ideas.
-8. Evaluate the fully fixed candidate once on locked final holdout.
-9. If holdout fails, reject the version. Do not patch it using the same holdout.
+4. In the new version root, copy the parent active `.py` into a new standalone active `.py`
+   file and write a `NEW_VERSION_HANDOFF.md` or equivalent context entry.
+5. Use a new thread/conversation for the child version, or restart from the handoff and mark
+   `context_contamination_risk`.
+6. Re-audit the copied baseline before implementing the candidate change.
+7. Implement the candidate with tests for timing, direction, sizing and collision handling.
+8. Repeat Stage 2 execution audit for the changed rule.
+9. Evaluate unchanged on development validation and document rejected as well as accepted candidates.
+10. Clean temporary/invalid outputs and update `CLEANUP_LOG.md`.
+11. Run Stage 7 parameter robustness only for an accepted rule, without reopening discarded ideas.
+12. Evaluate the fully fixed candidate once on locked final holdout.
+13. If holdout fails, reject the version. Do not patch it using the same holdout.
 
 ### Adjustment classification
 

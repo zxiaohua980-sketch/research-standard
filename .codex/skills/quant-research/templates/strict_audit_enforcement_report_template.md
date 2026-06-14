@@ -28,6 +28,7 @@ PASS | FAIL | CONDITIONAL_PASS
 | execution timing errors | PASS/FAIL/WARN/NA | yes/no | | |
 | survivorship bias | PASS/FAIL/WARN/NA | yes/no | | |
 | data/version contamination | PASS/FAIL/WARN/NA | yes/no | | |
+| file hygiene / temporary output contamination | PASS/FAIL/WARN/NA | yes/no | | |
 | cost model incompleteness | PASS/FAIL/WARN/NA | yes/no | | |
 | runtime safety failure | PASS/FAIL/WARN/NA | yes/no | | |
 
@@ -110,11 +111,27 @@ batch_vs_incremental: PASS | FAIL | NOT_RUN | NOT_APPLICABLE
 ## Data / Version Isolation
 
 - active_version_root:
+- active_py_file:
+- parent_active_py_copied: yes/no/NA
+- context_reset_status: new_thread/context_restarted_from_handoff/context_contamination_risk/NA
 - mutable_inputs_under_version_root: yes/no
 - outputs_under_version_root: yes/no
 - immutable_shared_data_hashes:
 - sibling_version_inputs_found: yes/no
 - loose_latest_final_copy_saved_runs_found: yes/no
+
+## File Hygiene / Cleanup
+
+- cleanup_log_ref:
+- obvious_temp_files_deleted: yes/no
+- uncertain_files_moved_to_trash_review: yes/no/NA
+- trash_review_dir:
+- protected_evidence_preserved:
+  - raw_data:
+  - ledgers:
+  - manifests:
+  - audit_replay_attribution_reports:
+  - frozen_forward_runtime_logs:
 
 ## Conclusion
 

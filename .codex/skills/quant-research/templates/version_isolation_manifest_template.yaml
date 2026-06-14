@@ -16,10 +16,16 @@ forbidden_input_roots:
   - other_version_cache
   - loose_saved_runs
 output_root:
+active_py_file:
+parent_active_py_file:
+parent_active_py_file_hash:
+new_version_handoff:
+context_reset_status: new_thread  # new_thread | context_restarted_from_handoff | context_contamination_risk
 data_snapshot_hashes:
 batch_backtest_ref:
 bar_by_bar_replay_ref:
 mtf_timing_audit_ref:
 version_isolation_check_ref:
+cleanup_log_ref:
 evidence_label: candidate_not_final
 notes:

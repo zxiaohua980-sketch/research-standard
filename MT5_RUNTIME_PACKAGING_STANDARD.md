@@ -42,8 +42,9 @@ If these are missing, the package status is `runtime_blocked`, not `demo_ready`.
 
 ## Direct EXE Contract
 
-The operator-facing deliverable must work by directly opening the EXE. BAT files may exist
-only as optional compatibility wrappers and must not be the only tested path.
+The operator-facing deliverable must work by directly opening the EXE. BAT/CMD/PowerShell
+wrappers are development artifacts. They may exist only outside the final operator folder and must
+not be copied into the folder handed to the user.
 
 On double-click, the EXE must:
 
@@ -59,15 +60,30 @@ On double-click, the EXE must:
 - write fatal startup exceptions to `logs\fatal_error_YYYYMMDD_HHMMSS.log` and keep the
   console readable long enough for an operator to see the failure.
 
-The default portable folder contract is:
+The default portable **operator** folder contract is:
 
 ```text
 package\
   StrategyRuntime.exe
   config.ini
   logs\
-  data_cache\
+  data_cache\     # optional; only if the runtime config uses it
 ```
+
+The operator folder rules are:
+
+- exactly one primary `.exe` must be present at the top level and it must run by double-click;
+- `config.ini` must sit beside the EXE;
+- `logs\` must exist and be empty at delivery;
+- `data_cache\` is allowed only when the runtime config uses it, and it must be empty at
+  delivery;
+- `.bat`, `.cmd`, `.ps1`, `.py`, `.spec`, source files, build scripts, historical logs,
+  historical caches, local test configs, `build\`, `dist\`, and `__pycache__\` are forbidden in
+  the final operator folder.
+
+If a build creates many BAT files, that folder is not the operator deliverable. Create a separate
+minimal `portable\<package_name>\` or `release\<package_name>\` folder and copy only the approved
+operator artifacts into it.
 
 Do not deliver source folders, PyInstaller `build`, `.spec`, historical logs, historical
 caches, local test configs, or machine-specific files as the operator copy folder.
@@ -263,8 +279,9 @@ Required offline build sequence:
 3. verify `config.ini` contains all required risk/order/reconciliation fields;
 4. build with PyInstaller only after static preflight passes;
 5. run package audit again after build;
-6. inspect the portable folder for path leaks, build artifacts, historical logs/caches, and
-   missing external config;
+6. inspect the portable operator folder for minimal shape: exactly one EXE, beside-EXE
+   `config.ini`, empty `logs\`, optional empty `data_cache\`, no BAT/CMD/PS1 wrappers, no source
+   files, no build artifacts, no historical logs/caches, and no path leaks;
 7. record EXE hash, config hash, build command, preflight result, and audit result.
 
 Required runtime smoke sequence, only when explicitly running the runtime:
@@ -336,6 +353,10 @@ A package cannot be called `portable_package_ready` unless:
 
 - static package preflight passed;
 - package audit has no FAIL;
+- the final operator folder contains exactly one runnable EXE, beside-EXE `config.ini`, empty
+  `logs\`, and optional empty `data_cache\` only if needed;
+- the final operator folder contains no `.bat`, `.cmd`, `.ps1`, `.py`, `.spec`, source/build
+  artifacts, historical logs, historical caches, or local test configs;
 - final EXE direct launch was tested when a runtime smoke was requested or required for handoff;
 - console shows dynamic cycle output during runtime smoke;
 - outputs are written under the portable folder;
@@ -345,8 +366,8 @@ A package cannot be called `portable_package_ready` unless:
 - dry-run mode does not call `order_send`;
 - DEMO order smoke, when explicitly authorized, confirms open/modify/close by broker state,
   not retcode alone;
-- the deliverable copy folder contains only the EXE, `config.ini`, empty `logs`, empty
-  `data_cache`, and explicitly requested docs/hash files.
+- the deliverable copy folder is the minimal operator package, not `build`, `dist`, source root,
+  or a folder full of helper BAT files.
 
 ## Evidence Labels
 

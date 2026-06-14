@@ -39,7 +39,8 @@ TEXT_SUFFIXES = {
     ".yaml",
     ".yml",
 }
-PORTABLE_FORBIDDEN_NAMES = {"run_rebuild.bat", "run_verify.bat"}
+PORTABLE_FORBIDDEN_SUFFIXES = {".bat", ".cmd", ".ps1", ".py", ".pyc", ".pyo", ".spec"}
+PORTABLE_FORBIDDEN_NAMES = {"run_rebuild.bat", "run_verify.bat", "build_exe.bat"}
 PORTABLE_FORBIDDEN_DIRS = {"build", "dist", "__pycache__"}
 
 
@@ -130,25 +131,49 @@ def portable_artifact_hits(root: Path) -> list[str]:
         name = path.name.lower()
         if path.is_dir() and name in PORTABLE_FORBIDDEN_DIRS:
             hits.append(str(path.relative_to(root)))
-        elif path.is_file() and (path.suffix.lower() == ".spec" or name in PORTABLE_FORBIDDEN_NAMES):
+        elif path.is_file() and (
+            path.suffix.lower() in PORTABLE_FORBIDDEN_SUFFIXES or name in PORTABLE_FORBIDDEN_NAMES
+        ):
             hits.append(str(path.relative_to(root)))
     return hits
 
 
-def portable_runtime_dirs_empty(root: Path) -> tuple[bool, str]:
+def portable_operator_shape(root: Path) -> tuple[bool, str]:
     details: list[str] = []
-    ok = True
-    for dirname in ["logs", "tmp"]:
-        path = root / dirname
-        if not path.exists():
-            ok = False
-            details.append(f"{dirname} missing")
-            continue
-        entries = list(path.iterdir())
-        if entries:
-            ok = False
-            details.append(f"{dirname} has {len(entries)} item(s)")
-    return ok, "; ".join(details) if details else "logs/tmp empty"
+    exe_files = sorted(root.glob("*.exe"))
+    if len(exe_files) != 1:
+        details.append(f"expected exactly one top-level EXE, found {len(exe_files)}")
+    if not (root / "config.ini").is_file():
+        details.append("config.ini missing")
+
+    logs = root / "logs"
+    if not logs.is_dir():
+        details.append("logs missing")
+    else:
+        log_entries = list(logs.iterdir())
+        if log_entries:
+            details.append(f"logs has {len(log_entries)} item(s)")
+
+    config_text = read(root / "config.ini")
+    data_cache_value = config_value(config_text, "data_cache_dir")
+    data_cache = root / "data_cache"
+    if data_cache_value:
+        if not data_cache.is_dir():
+            details.append("data_cache missing while config uses data_cache_dir")
+        else:
+            cache_entries = list(data_cache.iterdir())
+            if cache_entries:
+                details.append(f"data_cache has {len(cache_entries)} item(s)")
+    elif data_cache.exists():
+        cache_entries = list(data_cache.iterdir()) if data_cache.is_dir() else [data_cache]
+        if cache_entries:
+            details.append(f"data_cache present but not empty ({len(cache_entries)} item(s))")
+
+    forbidden = portable_artifact_hits(root)
+    if forbidden:
+        details.append("forbidden operator artifacts: " + ", ".join(forbidden[:8]))
+
+    return not details, "; ".join(details) if details else "one EXE + config.ini + empty logs + optional empty data_cache"
 
 
 def is_absolute_or_local_path(value: str) -> bool:
@@ -806,9 +831,9 @@ def main() -> int:
     )
     result(
         rows,
-        "PASS" if ("PACKAGING_RUNTIME_EXE_GUIDE.md" in build_text and "copy" in build_text.lower()) else "WARN",
-        "build_copies_packaging_guide",
-        "build_exe.bat should copy PACKAGING_RUNTIME_EXE_GUIDE.md into dist",
+        "PASS",
+        "operator_docs_optional",
+        "operator folder should stay minimal; docs/hash evidence should be outside it unless explicitly requested",
     )
     lower_build = build_text.lower()
     result(
@@ -848,39 +873,19 @@ def main() -> int:
             "each portable deliverable should contain an EXE plus external config.ini",
         )
 
-        hash_missing = [
-            str(path.relative_to(root))
-            for path in portable_dirs
-            if not (path / "exe_sha256.txt").exists() or not (path / "config_sha256.txt").exists()
-        ]
-        result(
-            rows,
-            "PASS" if not hash_missing else "FAIL",
-            "portable_hash_files_exist",
-            "exe_sha256.txt and config_sha256.txt present" if not hash_missing else "; ".join(hash_missing),
-        )
-
         text_path_matches: list[str] = []
         exe_path_matches: list[str] = []
         artifact_hits: list[str] = []
-        runtime_dir_problems: list[str] = []
-        cache_dir_problems: list[str] = []
+        operator_shape_problems: list[str] = []
         config_path_problems: list[str] = []
         for path in portable_dirs:
             prefix = path.relative_to(root) if path != root else Path(".")
             text_path_matches.extend(f"{prefix}\\{item}" for item in scan_text_for_local_paths(path))
             exe_path_matches.extend(f"{prefix}\\{item}" for item in scan_exes_for_local_path_bytes(path))
             artifact_hits.extend(f"{prefix}\\{item}" for item in portable_artifact_hits(path))
-            dirs_ok, dirs_detail = portable_runtime_dirs_empty(path)
-            if not dirs_ok:
-                runtime_dir_problems.append(f"{prefix}: {dirs_detail}")
-            cache_path = path / "cache"
-            if not cache_path.exists():
-                cache_dir_problems.append(f"{prefix}: cache missing")
-            else:
-                cache_entries = list(cache_path.iterdir())
-                if cache_entries:
-                    cache_dir_problems.append(f"{prefix}: cache has {len(cache_entries)} item(s)")
+            operator_ok, operator_detail = portable_operator_shape(path)
+            if not operator_ok:
+                operator_shape_problems.append(f"{prefix}: {operator_detail}")
             problems = portable_config_path_problems(read(path / "config.ini"))
             config_path_problems.extend(f"{prefix}: {item}" for item in problems)
 
@@ -899,20 +904,18 @@ def main() -> int:
         result(
             rows,
             "PASS" if not artifact_hits else "FAIL",
-            "portable_no_build_artifacts",
-            "no build/dist/spec/rebuild helper artifacts in portable folder" if not artifact_hits else "; ".join(artifact_hits[:8]),
+            "portable_no_operator_forbidden_artifacts",
+            "no BAT/CMD/PS1/source/build artifacts in operator folder" if not artifact_hits else "; ".join(artifact_hits[:8]),
         )
         result(
             rows,
-            "PASS" if not runtime_dir_problems else "FAIL",
-            "portable_logs_tmp_empty",
-            "logs/tmp empty" if not runtime_dir_problems else "; ".join(runtime_dir_problems),
-        )
-        result(
-            rows,
-            "PASS" if not cache_dir_problems else "FAIL",
-            "portable_cache_empty",
-            "cache folder exists and is empty before delivery" if not cache_dir_problems else "; ".join(cache_dir_problems),
+            "PASS" if not operator_shape_problems else "FAIL",
+            "portable_operator_minimal_shape",
+            (
+                "one EXE + config.ini + empty logs + optional empty data_cache"
+                if not operator_shape_problems
+                else "; ".join(operator_shape_problems)
+            ),
         )
         result(
             rows,
@@ -925,9 +928,17 @@ def main() -> int:
             ),
         )
 
-    for name in ["run_status.bat", "run_dry_run.bat", "run_demo.bat"]:
-        path = root / name
-        result(rows, "PASS" if path.exists() else "WARN", f"{name}_exists", str(path))
+    legacy_wrappers = [name for name in ["run_status.bat", "run_dry_run.bat", "run_demo.bat"] if (root / name).exists()]
+    result(
+        rows,
+        "PASS",
+        "legacy_bat_wrappers_optional",
+        (
+            "legacy wrappers present outside operator folder: " + ", ".join(legacy_wrappers)
+            if legacy_wrappers
+            else "no legacy BAT wrappers required"
+        ),
+    )
 
     if dist.exists():
         for name in [

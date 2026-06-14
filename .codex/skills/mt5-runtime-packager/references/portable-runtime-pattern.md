@@ -94,27 +94,38 @@ def resolve_runtime_path(config_path: Path, raw: str) -> Path:
     return config_path.parent / path
 ```
 
-## Dist Verification
+## Operator Deliverable Verification
 
-Minimum `dist` contents:
+`dist` may contain developer/build artifacts. The final user-facing operator folder must be a
+separate clean portable/release folder.
 
-```text
-runtime.exe
-config.ini
-run_status.bat
-run_dry_run.bat
-run_demo.bat
-README_RUNTIME.md
-logs\
-tmp\
-```
-
-Recommended docs:
+Minimum operator contents:
 
 ```text
-PACKAGING_RUNTIME_EXE_GUIDE.md
-MT5_DEMO_TRADE_API.md
+package\
+  runtime.exe
+  config.ini
+  logs\
+  data_cache\   # optional; only if config uses it
 ```
+
+Forbidden in the operator folder:
+
+```text
+*.bat
+*.cmd
+*.ps1
+*.py
+*.spec
+build\
+dist\
+__pycache__\
+historical logs/caches
+local test configs
+```
+
+Recommended docs and hash evidence may be kept in a build/audit folder outside the operator
+deliverable unless the user explicitly asks to include them.
 
 ## Safety Review Questions
 
@@ -125,7 +136,8 @@ Answer before declaring the package ready:
 3. Is REAL account hard rejected regardless of config?
 4. Are generated files written under the EXE directory, not PyInstaller temp and not MT5 source folders?
 5. Is the terminal/data path auto-discovered or externally configured?
-6. Does `run_demo.bat` reject when the demo gate is closed?
+6. Does the final operator folder contain exactly one runnable EXE, beside-EXE `config.ini`, and
+   empty `logs\`?
 7. Does order sending reconcile retcode against account state?
 8. Are monitor rows marked not forward-live and not performance evidence?
 9. Does startup reconcile existing positions before new signal handling?

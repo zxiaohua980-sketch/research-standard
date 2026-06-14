@@ -1,7 +1,7 @@
 interface:
   display_name: "MT5 Runtime Packager"
-  short_description: "Package MT5 EXEs with cost-aware risk and order safety."
-  default_prompt: "Use $mt5-runtime-packager to package or audit an MT5 Python runtime EXE with offline/static build checks, optional explicit MT5 runtime smoke, external config.ini, cost-inclusive position sizing, spread-aware pending-order prices, duplicate-signal-bar blocking, reconciliation logs, demo-only safety gates, and portable direct-launch behavior."
+  short_description: "Package MT5 EXEs as minimal direct-run operator folders."
+  default_prompt: "Use $mt5-runtime-packager to package or audit an MT5 Python runtime EXE with a minimal operator deliverable (one runnable EXE, beside-EXE config.ini, empty logs folder, optional empty data_cache only if needed), no BAT/CMD/PS1 wrappers in the final folder, offline/static build checks, optional explicit MT5 runtime smoke, cost-inclusive position sizing, spread-aware pending-order prices, duplicate-signal-bar blocking, reconciliation logs, demo-only safety gates, and portable direct-launch behavior."
 metadata:
-  version: "1.1.1"
-  purpose: "Package and audit MT5 Python runtimes as portable EXEs with offline/static package checks, explicit runtime-only MT5 account/magic snapshots, external config, cost-inclusive risk sizing, spread-aware pending orders, persistent signal execution ledgers, reconciliation, and demo-only safety."
+  version: "1.1.2"
+  purpose: "Package and audit MT5 Python runtimes as minimal portable operator EXE folders with external config, empty logs, no final BAT/CMD/PS1 wrappers, offline/static package checks, explicit runtime-only MT5 account/magic snapshots, cost-inclusive risk sizing, spread-aware pending orders, persistent signal execution ledgers, reconciliation, and demo-only safety."

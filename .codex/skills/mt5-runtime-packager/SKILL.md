@@ -1,6 +1,6 @@
 ---
 name: mt5-runtime-packager
-description: Package, audit, or document MetaTrader 5 / MT5 Python runtime monitors as portable Windows EXEs with offline/static build checks that do not open MT5, explicit runtime-only MT5 account/magic snapshots, direct double-click EXE operation, external config.ini, live console status output, MT5 API market-data caching, cost-inclusive position sizing with commission/spread/slippage risk denominator, spread-aware pending-order entry/SL/TP policies, persistent signal-execution ledgers that block duplicate same-bar orders, reconciliation logs, demo-only safety gates, configurable magic/comment namespaces, and MT5 terminal/data-path discovery. Use for MT5 runtime packaging, config.ini risk/order design, PyInstaller builds, demo order execution plumbing, portable EXEs, runtime smoke tests, moving runtimes to another computer, or Chinese requests such as 打包成exe文件, 模拟下单, 仓位计算, 手续费点差滑点, 挂单价格, 防止重复下单.
+description: Package, audit, or document MetaTrader 5 / MT5 Python runtime monitors as minimal portable Windows EXE operator folders with one double-click runnable EXE, beside-EXE config.ini, empty logs folder, no BAT/CMD/PS1 wrappers in the final user folder, offline/static build checks that do not open MT5, explicit runtime-only MT5 account/magic snapshots, live console status output, MT5 API market-data caching, cost-inclusive position sizing with commission/spread/slippage risk denominator, spread-aware pending-order entry/SL/TP policies, persistent signal-execution ledgers that block duplicate same-bar orders, reconciliation logs, demo-only safety gates, configurable magic/comment namespaces, and MT5 terminal/data-path discovery. Use for MT5 runtime packaging, config.ini risk/order design, PyInstaller builds, demo order execution plumbing, portable EXEs, runtime smoke tests, moving runtimes to another computer, or Chinese requests such as 打包成exe文件, 模拟下单, 仓位计算, 手续费点差滑点, 挂单价格, 防止重复下单.
 ---
 
 # MT5 Runtime Packager
@@ -26,7 +26,7 @@ Before touching a trading runtime, obey the project `AGENTS.md` and registry. St
 11. Verify pending-order price construction before any order-capable runtime is packaged: the config must declare price basis and spread-adjustment policy for entry, SL and TP rather than hiding the formula in code.
 12. Verify account reconciliation, persistent signal execution ledger, and outage recovery behavior before any monitor is allowed to place demo orders.
 13. After every source or config-default fix, rebuild and re-run the final EXE from the deliverable folder; do not rely on a pre-rebuild source test.
-14. Build a clean portable deliverable folder for copying to another computer. The primary operator folder should contain only the EXE, `config.ini`, empty `logs\`, empty `data_cache\`, and optional user-requested hash/docs files. Do not deliver the source runtime directory, PyInstaller `build`, `.spec`, historical logs, historical caches, or local test configs.
+14. Build a clean portable **operator** deliverable folder for copying to another computer. The user-facing folder must be minimal: one immediately double-click runnable `.exe`, one beside-EXE `config.ini`, and an empty `logs\` directory. `data_cache\` is allowed only when the config/runtime needs it, and it must be empty at delivery. Do not put BAT/CMD/PowerShell wrappers in the operator folder.
 15. Record the EXE hash, config hash, build command, portable folder contents, static preflight result, and any explicitly requested runtime smoke-test result.
 
 ## Direct EXE Operator Contract
@@ -42,17 +42,20 @@ The EXE launched by double-click must:
 - store runtime outputs under the copied EXE folder, not the original repo or build folder;
 - write fatal startup exceptions to `logs\fatal_error_YYYYMMDD_HHMMSS.log` and keep the console open long enough for the operator to read the error.
 
-The required default folder contract is:
+The required default operator folder contract is:
 
 ```text
 package\
   StrategyRuntime.exe
   config.ini
   logs\
-  data_cache\
+  data_cache\     # optional; only if the runtime config uses it
 ```
 
-Optional BAT wrappers may exist for compatibility, but the EXE itself must be self-sufficient.
+There must be exactly one primary `.exe` in the operator folder. It must be self-sufficient when
+double-clicked. Optional BAT/CMD/PowerShell wrappers may exist only outside the operator folder
+under a development/build area such as `dev_tools\` or `legacy_wrappers\`; they must not be copied
+into the final folder handed to the user.
 
 ## MT5 Path Portability Rules
 
@@ -100,10 +103,10 @@ Use a maintained `build_exe.bat` or `.spec` that:
 - Excludes unrelated heavy packages.
 - Copies `config.ini` to `dist` and creates empty `dist\logs` and `dist\data_cache`.
 - Records SHA256 for the EXE.
-- Creates a separate clean portable deliverable such as `portable\<package_name>` containing the EXE, external `config.ini`, empty `logs`, empty `data_cache`, and only user-requested docs/hash files.
+- Creates a separate clean portable operator deliverable such as `portable\<package_name>` containing exactly one runnable EXE, external `config.ini`, empty `logs`, and optional empty `data_cache` only if needed. The final user-facing folder must not contain `.bat`, `.cmd`, `.ps1`, `.py`, `.spec`, source files, build scripts, historical logs, historical caches, or local test configs.
 - Fails immediately if old `build`, `dist`, or `portable` folders cannot be removed; do not continue after "Access is denied" or file-in-use cleanup failures.
 
-Keep old BAT names only as wrappers if users already have shortcuts; make them delegate to the EXE with the same external `config.ini`. The final user-facing folder to copy to another computer is the portable folder, not the source runtime folder.
+Keep old BAT names only as development/legacy wrappers if users already have shortcuts; make them delegate to the EXE with the same external `config.ini`, and keep them outside the final operator folder. The final user-facing folder to copy to another computer is the minimal portable operator folder, not the source runtime folder.
 
 ## Required Config Contract
 
@@ -469,16 +472,17 @@ Run verification in this order:
 1. Offline/static preflight: syntax/import safety, config parsing, path portability, cost-inclusive sizing path, pending-order price policy path, signal-ledger path, and package hygiene. This step must not open MT5.
 2. Package audit: run or adapt `scripts/audit_mt5_runtime_package.py <runtime_dir>` and fail on any safety, portability, config, direct-EXE, logging, reconciliation, or cache-contract FAIL.
 3. Build: run the maintained PyInstaller build script only after offline/static preflight and audit pass. Treat cleanup errors, file-in-use, or access denied as blockers.
-4. Final EXE smoke: only when runtime execution is requested/required, launch the packaged EXE directly from the portable folder with its beside-EXE `config.ini`. It must show the live header immediately and write outputs under the portable folder.
+4. Final EXE smoke: only when runtime execution is requested/required, launch the single packaged EXE directly from the portable operator folder with its beside-EXE `config.ini`. It must show the live header immediately and write outputs under the portable folder.
 5. Portability smoke: when runtime execution is requested/required, copy the portable folder to a different temporary path and launch the EXE there. Outputs must be written under the copied folder, not the original repo/runtime/build directory.
 6. Runtime monitor smoke: when runtime execution is requested/required, run at least one full monitor cycle. Confirm dynamic console updates, account/magic snapshot, `monitor_cycle pass` or equivalent, reconciliation counts, scan counts, cache update status, and no unexpected `order_send` when config disables orders.
 7. Order smoke: only after the user explicitly authorizes DEMO testing, run a demo-only open/modify/close or `close_all_magic`, then restore the safe default config. Verify retcode plus broker-state observation, lifecycle rows, history export, and final magic-number positions/orders check.
 8. Risk/config audit: verify cost-inclusive sizing, commission-free symbol overrides, spread/slippage risk components, pending-order price formulas, raw-vs-adjusted order journal fields, and same-signal-bar duplicate blocking.
-9. Final hygiene: portable logs and data caches should be empty for delivery unless the user asked to include target-machine diagnostic evidence. Text files and EXE strings should not contain machine-specific paths such as `D:\MT5`, `C:\Users\<name>`, `%APPDATA%\MetaQuotes\Terminal`, or terminal hash IDs.
+9. Final hygiene: the operator folder should contain one `.exe`, `config.ini`, empty `logs\`, and optional empty `data_cache\` only if needed. No BAT/CMD/PowerShell wrappers, source files, PyInstaller specs, build folders, historical logs, historical caches, local test configs, or loose helper scripts may be present. Text files and EXE strings should not contain machine-specific paths such as `D:\MT5`, `C:\Users\<name>`, `%APPDATA%\MetaQuotes\Terminal`, or terminal hash IDs.
 
 Expected runtime behavior:
 
 - Direct EXE launch is sufficient; optional BAT wrappers cannot be the only tested path.
+- Final operator delivery is minimal: EXE + config.ini + empty logs folder. BAT/CMD/PS1 wrappers are development artifacts, not user-facing delivery artifacts.
 - Offline packaging does not by itself open MT5; live account/magic checks belong to intentional runtime smoke or order-enabled startup.
 - A strategy monitor with no latest signal reports `attempted=0` rather than forcing a trade.
 - Startup reconciles existing positions, pending orders, recent order/deal history, and unresolved local intents before scanning new signals.

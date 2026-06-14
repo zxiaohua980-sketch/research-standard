@@ -110,17 +110,22 @@ caches, local test configs, or machine-specific files as the operator copy folde
 - order limits: `order_enabled`, `risk_cash_per_order`, `max_volume_per_order`,
   `max_total_volume`, `max_positions_total`, `max_positions_per_symbol`,
   `max_new_orders_per_cycle`;
+- market/open-price entry execution: `entry_execution_mode`,
+  `market_entry_price_policy=broker_tick_side_no_manual_spread`,
+  `market_entry_use_tick_side=true`, `spread_adjust_market_entry=false`, and
+  `spread_risk_accounting`;
 - pending-order management: `pending_expire_bars`, `pending_expire_minutes`,
-  `cancel_stale_pending=true`, and spread-aware pending price handling;
+  `cancel_stale_pending=true`, `signal_price_basis`, `pending_price_policy`,
+  `sltp_price_policy`, and side-specific bid/ask spread handling;
 - cost-inclusive sizing: `position_sizing_mode=cost_inclusive_risk_cash`,
   `include_commission_in_risk=true`, `commission_per_lot_round_turn_usd=7.0`,
   `commission_free_symbols=XAUUSD,BTCUSD`, `include_spread_in_risk=true`,
   `spread_source`, `include_slippage_in_risk=true`, `slippage_points_entry`,
   `slippage_points_exit`, `volume_rounding=floor_to_step`, and
   `max_risk_overshoot_pct=0`;
-- pending-order price policy: `signal_price_basis`, `pending_price_policy`,
-  `adjust_pending_entry_for_spread`, `adjust_sl_for_spread`,
-  `adjust_tp_for_spread`, and `reject_if_adjusted_sl_invalid`;
+- pending-order price policy: `adjust_buy_pending_entry_for_spread=true`,
+  `adjust_sell_pending_entry_for_spread=false`, `adjust_buy_sltp_for_spread=false`,
+  `adjust_sell_sltp_for_spread=true`, and `reject_if_adjusted_sl_invalid`;
 - duplicate signal guard: `signal_execution_ledger_path`, `signal_key_fields`,
   `consume_signal_before_order_send=true`, and `block_duplicate_signal_bar=true`;
 - reconciliation: `reconcile_on_startup`, `reconcile_each_cycle`, `recovery_lookback_days`,
@@ -154,29 +159,90 @@ Volume must round down to the broker lot step by default. If minimum volume, spr
 commission or adjusted stop distance would exceed configured risk, the order must be rejected
 unless an explicit audited overshoot policy allows it.
 
+### Market/Open-Price Entry Execution
+
+Open-price or market-entry execution must not reuse pending-order spread adjustment.
+
+When the runtime sends an immediate market order at the intended open/entry time, do not manually
+add spread to the requested entry price. Use the broker executable side:
+
+```text
+BUY  market/open entry price = current tick.ask
+SELL market/open entry price = current tick.bid
+```
+
+The following is forbidden for market/open `order_send` entries:
+
+```text
+BUY  entry = raw_open + spread_price
+SELL entry = raw_open - spread_price
+```
+
+That adjustment is for conservative pending-order construction or historical bid-chart modelling,
+not for the actual market order request.
+
+Required config:
+
+```ini
+[orders]
+entry_execution_mode = market
+market_entry_price_policy = broker_tick_side_no_manual_spread
+market_entry_use_tick_side = true
+spread_adjust_market_entry = false
+spread_risk_accounting = actual_fill_no_extra_spread
+```
+
+Risk accounting must avoid double counting spread:
+
+- if entry-to-SL risk uses the actual executable/fill side such as BUY ask or SELL bid, use
+  `spread_risk_accounting=actual_fill_no_extra_spread`;
+- if entry-to-SL risk uses raw bid-chart open/SL only, use
+  `spread_risk_accounting=raw_chart_add_spread_cost`.
+
+The runtime must log raw signal open, current bid/ask, selected executable price, and
+spread-risk-accounting mode for every attempted market/open entry.
+
 ### Pending Order Price Policy
 
 Pending order formulas must be declared in config and logged with both raw and adjusted levels.
 Do not hide spread handling in code.
 
-Default conservative policy:
+Default bid-chart to MT5 bid/ask policy:
 
 ```text
-pending_price_policy = conservative_full_spread
+pending_price_policy = broker_bidask_from_bid_chart
+sltp_price_policy    = broker_bidask_from_bid_chart
 signal_price_basis   = bid_chart
 
-BUY  pending_entry = raw_entry + spread_price
-BUY  sl            = raw_sl    - spread_price
-BUY  tp            = raw_tp
+BUY_STOP / BUY_LIMIT   pending_entry = raw_entry + spread_price
+SELL_STOP / SELL_LIMIT pending_entry = raw_entry
 
-SELL pending_entry = raw_entry - spread_price
-SELL sl            = raw_sl    + spread_price
-SELL tp            = raw_tp
+BUY  position sl/tp = raw_sl / raw_tp
+SELL position sl/tp = raw_sl + spread_price / raw_tp + spread_price
 ```
 
-This policy is intentionally conservative and symmetric. If a runtime instead uses exact MT5
-bid/ask trigger semantics, it must set `pending_price_policy=broker_bidask_exact`, document
-which side triggers each level, and audit formulas against `symbol_info_tick().bid/ask`.
+For default MT5 bid-chart levels, BUY pending entries trigger on Ask, SELL pending entries trigger
+on Bid, BUY position SL/TP closes on Bid, and SELL position SL/TP closes on Ask. Do not use a
+symmetric "entry plus/minus spread, SL plus/minus spread" shortcut.
+
+Required config:
+
+```ini
+[orders]
+signal_price_basis = bid_chart
+pending_price_policy = broker_bidask_from_bid_chart
+sltp_price_policy = broker_bidask_from_bid_chart
+adjust_buy_pending_entry_for_spread = true
+adjust_sell_pending_entry_for_spread = false
+adjust_buy_sltp_for_spread = false
+adjust_sell_sltp_for_spread = true
+reject_if_adjusted_sl_invalid = true
+min_pending_distance_points_buffer = 0
+```
+
+If a runtime uses a different price basis, it must document which MT5 side triggers each level and
+audit formulas against `symbol_info_tick().bid/ask`. `conservative_full_spread` is a legacy/testing
+policy only and must not be the default for order-capable MT5 packages.
 
 After adjustment, the runtime must validate long SL below entry, short SL above entry,
 broker stops level, minimum pending distance, tick size rounding, and lot-step risk impact.

@@ -260,6 +260,112 @@ def magic_orders(mt5: Any, magic: int, symbol: str | None = None) -> list[Any]:
     return [o for o in (orders or []) if int(getattr(o, "magic", 0)) == int(magic)]
 
 
+def market_entry_price_from_tick(mt5: Any, symbol: str, side: str) -> tuple[float, dict[str, Any]]:
+    """Return the broker executable price for an immediate market/open entry.
+
+    This helper does not initialize MT5 and does not send an order. It only reads
+    the current tick and selects the executable side:
+
+    - BUY uses ask;
+    - SELL uses bid.
+
+    Do not manually add/subtract spread to this result. If risk is calculated
+    from this executable side, use spread_risk_accounting=actual_fill_no_extra_spread
+    to avoid double counting spread in the risk denominator.
+    """
+    tick = mt5.symbol_info_tick(symbol)
+    if tick is None:
+        raise RuntimeError(f"symbol_info_tick unavailable for {symbol}")
+    bid = float(getattr(tick, "bid", 0.0) or 0.0)
+    ask = float(getattr(tick, "ask", 0.0) or 0.0)
+    normalized_side = side.strip().upper()
+    if normalized_side == "BUY":
+        price = ask
+    elif normalized_side == "SELL":
+        price = bid
+    else:
+        raise ValueError(f"unsupported side: {side}")
+    if price <= 0:
+        raise RuntimeError(f"invalid executable price for {symbol} {side}: bid={bid}, ask={ask}")
+    return price, {
+        "symbol": symbol,
+        "side": normalized_side,
+        "bid": bid,
+        "ask": ask,
+        "selected_entry_price": price,
+        "market_entry_price_policy": "broker_tick_side_no_manual_spread",
+    }
+
+
+def bid_chart_to_mt5_order_prices(
+    *,
+    side: str,
+    spread_price: float,
+    raw_entry: float | None = None,
+    raw_sl: float | None = None,
+    raw_tp: float | None = None,
+    entry_execution_mode: str = "pending",
+) -> dict[str, Any]:
+    """Convert raw bid-chart strategy levels to MT5 bid/ask order prices.
+
+    For FX/CFD symbols, MT5 chart OHLC is normally Bid-based. Under that default:
+
+    - BUY market/open entry uses broker Ask and should not call this to add spread.
+    - SELL market/open entry uses broker Bid and should not call this to subtract spread.
+    - BUY pending entries (Buy Stop/Buy Limit) trigger on Ask, so add spread.
+    - SELL pending entries (Sell Stop/Sell Limit) trigger on Bid, so do not adjust entry.
+    - BUY position SL/TP close on Bid, so do not adjust SL/TP.
+    - SELL position SL/TP close on Ask, so add spread to SL/TP.
+
+    The function returns both adjusted prices and an audit dictionary. It performs no MT5 I/O.
+    """
+    normalized_side = side.strip().upper()
+    if normalized_side not in {"BUY", "SELL"}:
+        raise ValueError(f"unsupported side: {side}")
+    spread = float(spread_price or 0.0)
+    if spread < 0:
+        raise ValueError(f"spread_price must be non-negative: {spread_price}")
+
+    adjusted_entry: float | None = None
+    adjusted_sl: float | None = None
+    adjusted_tp: float | None = None
+    mode = entry_execution_mode.strip().lower()
+
+    if raw_entry is not None:
+        if mode == "pending":
+            adjusted_entry = float(raw_entry) + spread if normalized_side == "BUY" else float(raw_entry)
+        elif mode in {"market", "open", "open_price"}:
+            adjusted_entry = None
+        else:
+            raise ValueError(f"unsupported entry_execution_mode: {entry_execution_mode}")
+
+    if raw_sl is not None:
+        adjusted_sl = float(raw_sl) if normalized_side == "BUY" else float(raw_sl) + spread
+    if raw_tp is not None:
+        adjusted_tp = float(raw_tp) if normalized_side == "BUY" else float(raw_tp) + spread
+
+    return {
+        "side": normalized_side,
+        "signal_price_basis": "bid_chart",
+        "pending_price_policy": "broker_bidask_from_bid_chart",
+        "sltp_price_policy": "broker_bidask_from_bid_chart",
+        "entry_execution_mode": mode,
+        "spread_price": spread,
+        "raw_entry": raw_entry,
+        "raw_sl": raw_sl,
+        "raw_tp": raw_tp,
+        "adjusted_entry": adjusted_entry,
+        "adjusted_sl": adjusted_sl,
+        "adjusted_tp": adjusted_tp,
+        "rules": {
+            "buy_pending_entry": "raw_entry + spread_price",
+            "sell_pending_entry": "raw_entry",
+            "buy_sltp": "raw_sl/raw_tp",
+            "sell_sltp": "raw_sl/raw_tp + spread_price",
+        },
+    }
+
+
 def trade_mode_label(trade_mode: int | None) -> str:
     """Return a stable label for MT5 account trade_mode values."""
     if trade_mode == TRADE_MODE_DEMO:

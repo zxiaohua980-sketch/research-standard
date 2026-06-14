@@ -1,6 +1,6 @@
 ---
 name: mt5-runtime-packager
-description: Package, audit, or document MetaTrader 5 / MT5 Python runtime monitors as minimal portable Windows EXE operator folders with one double-click runnable EXE, beside-EXE config.ini, empty logs folder, no BAT/CMD/PS1 wrappers in the final user folder, offline/static build checks that do not open MT5, explicit runtime-only MT5 account/magic snapshots, live console status output, MT5 API market-data caching, cost-inclusive position sizing with commission/spread/slippage risk denominator, spread-aware pending-order entry/SL/TP policies, persistent signal-execution ledgers that block duplicate same-bar orders, reconciliation logs, demo-only safety gates, configurable magic/comment namespaces, and MT5 terminal/data-path discovery. Use for MT5 runtime packaging, config.ini risk/order design, PyInstaller builds, demo order execution plumbing, portable EXEs, runtime smoke tests, moving runtimes to another computer, or Chinese requests such as 打包成exe文件, 模拟下单, 仓位计算, 手续费点差滑点, 挂单价格, 防止重复下单.
+description: Package, audit, or document MT5 Python runtime monitors as minimal portable EXE operator folders with one runnable EXE, beside-EXE config.ini, empty logs, no BAT/CMD/PS1 wrappers in the final folder, offline/static build checks that do not open MT5, runtime-only account/magic snapshots, cost-inclusive sizing, MT5 bid/ask-correct market/open entries, Buy Stop/Sell Stop and SL/TP spread handling, same-bar duplicate-order ledgers, reconciliation logs, demo-only safety gates, magic/comment namespaces, and terminal/data-path discovery. Use for MT5 runtime packaging, config.ini risk/order design, PyInstaller builds, demo order plumbing, portable EXEs, runtime smoke tests, moving runtimes to another computer, or Chinese requests such as 打包成exe文件, 模拟下单, 仓位计算, 手续费点差滑点, 挂单价格, 防止重复下单.
 ---
 
 # MT5 Runtime Packager
@@ -23,7 +23,7 @@ Before touching a trading runtime, obey the project `AGENTS.md` and registry. St
 8. Keep `config.ini` external beside the EXE. Never bury machine-specific settings, account identity, risk limits, refresh interval, magic number, comment prefix, or MT5 paths inside the binary.
 9. The modern operator deliverable is opened by double-clicking the EXE. BAT files are optional legacy wrappers only and must not be the primary contract.
 10. Verify cost-inclusive position sizing before any order-capable runtime is packaged: lots must equal configured risk cash divided by total per-lot risk, where total per-lot risk includes entry-to-SL price loss, commission, configured/fetched spread, and slippage estimate. XAUUSD and BTCUSD may be commission-free only when explicitly configured.
-11. Verify pending-order price construction before any order-capable runtime is packaged: the config must declare price basis and spread-adjustment policy for entry, SL and TP rather than hiding the formula in code.
+11. Verify entry price construction before any order-capable runtime is packaged. Market/open-price entries and pending-order entries are different contracts. A market/open-price entry must not reuse the pending-order `entry +/- spread` adjustment; pending orders must declare their own price basis and spread-adjustment policy for entry, SL and TP.
 12. Verify account reconciliation, persistent signal execution ledger, and outage recovery behavior before any monitor is allowed to place demo orders.
 13. After every source or config-default fix, rebuild and re-run the final EXE from the deliverable folder; do not rely on a pre-rebuild source test.
 14. Build a clean portable **operator** deliverable folder for copying to another computer. The user-facing folder must be minimal: one immediately double-click runnable `.exe`, one beside-EXE `config.ini`, and an empty `logs\` directory. `data_cache\` is allowed only when the config/runtime needs it, and it must be empty at delivery. Do not put BAT/CMD/PowerShell wrappers in the operator folder.
@@ -126,7 +126,8 @@ Keep old BAT names only as development/legacy wrappers if users already have sho
 - market data: `data_source=mt5_api`, `bars_to_keep=3000`, `cache_refresh_bars`, `data_cache_dir=.\data_cache`, `exclude_current_bar=true`, `atomic_cache_write=true`;
 - order limits: `order_enabled`, `risk_cash_per_order`, `max_volume_per_order`, `max_total_volume`, `max_positions_total`, `max_positions_per_symbol`, `max_new_orders_per_cycle`;
 - cost-inclusive sizing: `position_sizing_mode=cost_inclusive_risk_cash`, `include_commission_in_risk=true`, `commission_per_lot_round_turn_usd=7.0`, `commission_free_symbols=XAUUSD,BTCUSD`, `include_spread_in_risk=true`, `spread_source=fixed_points`, `fixed_spread_points_default`, `include_slippage_in_risk=true`, `slippage_points_entry`, `slippage_points_exit`, `volume_rounding=floor_to_step`, `max_risk_overshoot_pct=0`;
-- pending-order management: `pending_expire_bars`, `pending_expire_minutes`, `cancel_stale_pending=true`, `signal_price_basis`, `pending_price_policy`, and explicit spread-aware pending price handling for entry/SL/TP;
+- market/open-price entry execution: `entry_execution_mode`, `market_entry_price_policy=broker_tick_side_no_manual_spread`, `market_entry_use_tick_side=true`, `spread_adjust_market_entry=false`, and `spread_risk_accounting`;
+- pending-order management: `pending_expire_bars`, `pending_expire_minutes`, `cancel_stale_pending=true`, `signal_price_basis`, `pending_price_policy`, `sltp_price_policy`, and side-specific bid/ask spread handling for BUY pending entries, SELL pending entries, BUY SL/TP, and SELL SL/TP;
 - duplicate-signal prevention: `signal_execution_ledger_path`, `signal_key_fields`, `consume_signal_before_order_send=true`, `block_duplicate_signal_bar=true`;
 - reconciliation: `reconcile_on_startup`, `reconcile_each_cycle`, `recovery_lookback_days`, `history_future_buffer_hours`, `order_confirm_timeout_seconds`, `order_confirm_poll_interval_seconds`, `unknown_freeze_new_orders`;
 - logging: `log_dir=.\logs`, `runtime_log_enabled`, `error_log_enabled`, `reconciliation_log_enabled`, `order_journal_enabled`, `position_snapshot_enabled`;
@@ -186,6 +187,100 @@ Audit requirements:
 - prove XAUUSD/BTCUSD commission exemption is config-driven;
 - log each order's raw risk components before sending.
 
+## Market/Open-Price Entry Contract
+
+Open-price or market-entry execution is **not** the same as pending-order price construction.
+
+When the strategy says "enter at the next bar open" and the runtime sends an immediate market
+order at that time, do not manually add spread to the order entry price. The runtime must use the
+broker's executable side:
+
+```text
+BUY  market/open entry price = current tick.ask
+SELL market/open entry price = current tick.bid
+```
+
+Do not do this for market/open entries:
+
+```text
+BUY  entry = raw_open + spread_price   # forbidden for market/open order_send
+SELL entry = raw_open - spread_price   # forbidden for market/open order_send
+```
+
+That `entry +/- spread` adjustment belongs to conservative pending-order construction or to
+historical bid-chart backtest modelling, not to the actual market-order request price.
+
+Required config fields:
+
+```ini
+[orders]
+entry_execution_mode = market
+market_entry_price_policy = broker_tick_side_no_manual_spread
+market_entry_use_tick_side = true
+spread_adjust_market_entry = false
+spread_risk_accounting = actual_fill_no_extra_spread
+```
+
+Risk accounting must avoid double counting spread:
+
+- If `entry_to_sl_price_loss_cash_per_lot` is calculated from the actual executable/fill side
+  such as BUY ask or SELL bid, use `spread_risk_accounting=actual_fill_no_extra_spread`.
+- If risk is calculated from raw bid-chart levels only, use
+  `spread_risk_accounting=raw_chart_add_spread_cost` and add spread as a separate cost component.
+- In both cases, commission and slippage policies still remain config-driven and auditable.
+
+Audit requirements:
+
+- prove market/open orders use `symbol_info_tick().ask` for BUY and `symbol_info_tick().bid` for
+  SELL, or an equivalent broker-reported fill price after send;
+- prove no manual `raw_open +/- spread` entry shift is applied to market/open order requests;
+- prove spread is not double counted in the risk denominator;
+- log raw signal open, broker tick bid/ask, selected execution price, and spread-risk-accounting
+  mode for each attempted order.
+
+## Bid/Ask Spread Adjustment Contract
+
+Default raw strategy levels are assumed to come from MT5 chart OHLC, which for FX/CFD symbols is
+normally bid-chart data. Under `signal_price_basis=bid_chart`, convert raw strategy levels to MT5
+execution/trigger sides like this:
+
+```text
+MARKET / OPEN-PRICE ENTRY
+BUY  entry = current tick.ask   # no manual raw_open + spread
+SELL entry = current tick.bid   # no manual raw_open - spread
+
+PENDING ENTRY
+BUY_STOP / BUY_LIMIT   entry = raw_entry + spread_price   # buy pending triggers on Ask
+SELL_STOP / SELL_LIMIT entry = raw_entry                  # sell pending triggers on Bid
+
+ATTACHED SL/TP AFTER POSITION OPENS
+BUY  sl = raw_sl
+BUY  tp = raw_tp
+SELL sl = raw_sl + spread_price
+SELL tp = raw_tp + spread_price
+```
+
+Do not use one symmetric "add/subtract spread everywhere" rule. The correct adjustment depends on
+whether the order is a market/open entry, buy pending entry, sell pending entry, BUY position SL/TP,
+or SELL position SL/TP.
+
+Required config fields:
+
+```ini
+[orders]
+signal_price_basis = bid_chart
+pending_price_policy = broker_bidask_from_bid_chart
+sltp_price_policy = broker_bidask_from_bid_chart
+adjust_buy_pending_entry_for_spread = true
+adjust_sell_pending_entry_for_spread = false
+adjust_buy_sltp_for_spread = false
+adjust_sell_sltp_for_spread = true
+```
+
+If raw levels are not bid-chart levels, the config must say so with `signal_price_basis`, and the
+runtime must document the equivalent conversion. `conservative_full_spread` is a legacy/testing
+policy only and must not be used as the default for MT5 order-capable packages.
+
 ## Pending Order Price Contract
 
 Pending order prices must be deterministic and config-driven. Do not hide spread adjustment
@@ -196,30 +291,25 @@ First declare the signal price basis:
 ```ini
 [orders]
 signal_price_basis = bid_chart
-pending_price_policy = conservative_full_spread
+pending_price_policy = broker_bidask_from_bid_chart
 spread_price_source = same_as_risk
 ```
 
 Supported policies:
 
-### `conservative_full_spread`
+### `broker_bidask_from_bid_chart`
 
-Use this when raw signal levels are strategy/chart levels and the user wants conservative
-spread-aware pending orders:
+Use this when raw signal levels are MT5 bid-chart levels:
 
 ```text
-BUY  pending_entry = raw_entry + spread_price
-BUY  sl            = raw_sl    - spread_price
-BUY  tp            = raw_tp
+BUY_STOP / BUY_LIMIT   pending_entry = raw_entry + spread_price
+SELL_STOP / SELL_LIMIT pending_entry = raw_entry
 
-SELL pending_entry = raw_entry - spread_price
-SELL sl            = raw_sl    + spread_price
-SELL tp            = raw_tp
+BUY  position sl/tp = raw_sl / raw_tp
+SELL position sl/tp = raw_sl + spread_price / raw_tp + spread_price
 ```
 
-This matches the common user intent: long orders pay spread on entry and get a more
-conservative stop; short orders are symmetric. It is conservative, but it is not a substitute
-for broker bid/ask audit.
+This is the default exact MT5 bid/ask conversion for bid-chart strategy levels.
 
 ### `broker_bidask_exact`
 
@@ -240,18 +330,20 @@ Required config fields:
 
 ```ini
 [orders]
-pending_price_policy = conservative_full_spread
+pending_price_policy = broker_bidask_from_bid_chart
+sltp_price_policy = broker_bidask_from_bid_chart
 signal_price_basis = bid_chart
-adjust_pending_entry_for_spread = true
-adjust_sl_for_spread = true
-adjust_tp_for_spread = false
+adjust_buy_pending_entry_for_spread = true
+adjust_sell_pending_entry_for_spread = false
+adjust_buy_sltp_for_spread = false
+adjust_sell_sltp_for_spread = true
 reject_if_adjusted_sl_invalid = true
 min_pending_distance_points_buffer = 0
 ```
 
 Audit requirements:
 
-- list formulas for long and short entry/SL/TP;
+- list formulas for market/open entry, BUY_STOP, SELL_STOP, BUY SL/TP and SELL SL/TP;
 - prove adjusted long SL remains below entry and adjusted short SL remains above entry;
 - prove broker stops-level/min-distance checks run after adjustment;
 - prove order journal records both raw and adjusted levels;
@@ -280,11 +372,18 @@ include_slippage_in_risk = true
 slippage_points_entry = 0
 slippage_points_exit = 0
 volume_rounding = floor_to_step
-pending_price_policy = conservative_full_spread
+entry_execution_mode = market
+market_entry_price_policy = broker_tick_side_no_manual_spread
+market_entry_use_tick_side = true
+spread_adjust_market_entry = false
+spread_risk_accounting = actual_fill_no_extra_spread
+pending_price_policy = broker_bidask_from_bid_chart
+sltp_price_policy = broker_bidask_from_bid_chart
 signal_price_basis = bid_chart
-adjust_pending_entry_for_spread = true
-adjust_sl_for_spread = true
-adjust_tp_for_spread = false
+adjust_buy_pending_entry_for_spread = true
+adjust_sell_pending_entry_for_spread = false
+adjust_buy_sltp_for_spread = false
+adjust_sell_sltp_for_spread = true
 signal_execution_ledger_path = .\logs\signal_execution_ledger.jsonl
 consume_signal_before_order_send = true
 block_duplicate_signal_bar = true
@@ -321,11 +420,18 @@ include_slippage_in_risk = true
 slippage_points_entry = 0
 slippage_points_exit = 0
 volume_rounding = floor_to_step
-pending_price_policy = conservative_full_spread
+entry_execution_mode = market
+market_entry_price_policy = broker_tick_side_no_manual_spread
+market_entry_use_tick_side = true
+spread_adjust_market_entry = false
+spread_risk_accounting = actual_fill_no_extra_spread
+pending_price_policy = broker_bidask_from_bid_chart
+sltp_price_policy = broker_bidask_from_bid_chart
 signal_price_basis = bid_chart
-adjust_pending_entry_for_spread = true
-adjust_sl_for_spread = true
-adjust_tp_for_spread = false
+adjust_buy_pending_entry_for_spread = true
+adjust_sell_pending_entry_for_spread = false
+adjust_buy_sltp_for_spread = false
+adjust_sell_sltp_for_spread = true
 signal_execution_ledger_path = .\logs\signal_execution_ledger.jsonl
 consume_signal_before_order_send = true
 block_duplicate_signal_bar = true

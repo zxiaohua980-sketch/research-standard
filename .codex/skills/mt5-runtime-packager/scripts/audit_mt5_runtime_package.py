@@ -467,12 +467,61 @@ def main() -> int:
             else "missing " + ", ".join(missing_cost_risk)
         ),
     )
+    market_entry_keys = [
+        "entry_execution_mode",
+        "market_entry_price_policy",
+        "market_entry_use_tick_side",
+        "spread_adjust_market_entry",
+        "spread_risk_accounting",
+    ]
+    missing_market_entry = [key for key in market_entry_keys if not config_has_key(config_text, key)]
+    market_entry_markers = [
+        "broker_tick_side_no_manual_spread",
+        "market_entry_price_from_tick",
+        "symbol_info_tick",
+        ".ask",
+        ".bid",
+        "spread_adjust_market_entry",
+        "actual_fill_no_extra_spread",
+    ]
+    manual_spread_entry_patterns = [
+        r"raw_open\s*\+\s*spread",
+        r"raw_entry\s*\+\s*spread",
+        r"open_price\s*\+\s*spread",
+        r"raw_open\s*-\s*spread",
+        r"raw_entry\s*-\s*spread",
+        r"open_price\s*-\s*spread",
+    ]
+    manual_market_spread_entry = any(re.search(pattern, lower_executor) for pattern in manual_spread_entry_patterns)
+    result(
+        rows,
+        "PASS" if (
+            not can_send_orders
+            or (
+                not missing_market_entry
+                and contains_any(executor_text + config_text, market_entry_markers)
+                and not manual_market_spread_entry
+            )
+        ) else "FAIL",
+        "market_open_entry_no_manual_spread_adjustment",
+        (
+            "market/open entries use broker tick side and do not manually add spread to entry"
+            if not missing_market_entry and not manual_market_spread_entry
+            else (
+                "manual raw_open/raw_entry/open_price +/- spread pattern found"
+                if manual_market_spread_entry
+                else "missing " + ", ".join(missing_market_entry)
+            )
+        ),
+    )
     pending_price_keys = [
         "pending_price_policy",
+        "sltp_price_policy",
         "signal_price_basis",
-        "adjust_pending_entry_for_spread",
-        "adjust_sl_for_spread",
-        "adjust_tp_for_spread",
+        "adjust_buy_pending_entry_for_spread",
+        "adjust_sell_pending_entry_for_spread",
+        "adjust_buy_sltp_for_spread",
+        "adjust_sell_sltp_for_spread",
         "reject_if_adjusted_sl_invalid",
     ]
     missing_pending_price = [key for key in pending_price_keys if not config_has_key(config_text, key)]
@@ -481,21 +530,35 @@ def main() -> int:
         "adjusted_entry",
         "adjusted_sl",
         "adjusted_tp",
-        "conservative_full_spread",
+        "broker_bidask_from_bid_chart",
         "broker_bidask_exact",
+        "buy_pending_entry",
+        "sell_pending_entry",
+        "sell_sltp",
         "reject_if_adjusted_sl_invalid",
     ]
+    pending_policy = (config_value(config_text, "pending_price_policy") or "").lower()
+    sltp_policy = (config_value(config_text, "sltp_price_policy") or "").lower()
+    legacy_conservative_policy = pending_policy == "conservative_full_spread" or sltp_policy == "conservative_full_spread"
     result(
         rows,
         "PASS" if (
             not can_send_orders
-            or (not missing_pending_price and contains_any(executor_text + config_text, pending_price_markers))
+            or (
+                not missing_pending_price
+                and contains_any(executor_text + config_text, pending_price_markers)
+                and not legacy_conservative_policy
+            )
         ) else "FAIL",
         "spread_aware_pending_price_policy",
         (
-            "pending entry/SL/TP spread policy is externalized and auditable"
-            if not missing_pending_price
-            else "missing " + ", ".join(missing_pending_price)
+            "pending entry/SL/TP bid/ask policy is side-specific and auditable"
+            if not missing_pending_price and not legacy_conservative_policy
+            else (
+                "conservative_full_spread is legacy/testing only, not default MT5 order policy"
+                if legacy_conservative_policy
+                else "missing " + ", ".join(missing_pending_price)
+            )
         ),
     )
     duplicate_guard_keys = [

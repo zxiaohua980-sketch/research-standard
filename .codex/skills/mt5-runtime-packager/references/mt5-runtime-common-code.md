@@ -17,6 +17,8 @@ The module includes:
 - `calculate_enhanced_zigzag(high_arr, low_arr, depth, deviation, backstep, point_size)`
 - `zigzag_points_from_ohlc(rows_old_to_new, point_size, depth=12, deviation=5, backstep=3, tick_size=...)`
 - `DemoTradeGates`
+- `market_entry_price_from_tick(...)`
+- `bid_chart_to_mt5_order_prices(...)`
 - `send_market_order_once(...)`
 - `close_position_once(...)`
 - `magic_positions(...)` and `magic_orders(...)`
@@ -52,6 +54,66 @@ mt5_comment_max_length = 16
 ```
 
 The common module hard-rejects REAL accounts. Do not weaken that in a skill-derived runtime.
+
+## Market/Open Entry Price Pattern
+
+If a strategy enters at the next bar open and the runtime sends an immediate market order at that
+time, do not manually add spread to the order request price. Use the broker executable side:
+
+```python
+entry_price, entry_price_audit = market_entry_price_from_tick(mt5, "EURUSD", "BUY")
+# BUY uses tick.ask; SELL uses tick.bid.
+# Do not do raw_open + spread for market/open order_send.
+```
+
+Recommended config:
+
+```ini
+[orders]
+entry_execution_mode = market
+market_entry_price_policy = broker_tick_side_no_manual_spread
+market_entry_use_tick_side = true
+spread_adjust_market_entry = false
+spread_risk_accounting = actual_fill_no_extra_spread
+```
+
+Use `spread_risk_accounting=actual_fill_no_extra_spread` when the entry-to-SL risk denominator
+uses the executable side returned by the broker tick. Use `raw_chart_add_spread_cost` only when
+risk is calculated from raw bid-chart levels and spread is not already embedded in entry-to-SL
+distance.
+
+## Bid-Chart Pending Entry And SL/TP Pattern
+
+For MT5 bid-chart raw levels:
+
+```text
+BUY_STOP / BUY_LIMIT   entry = raw_entry + spread
+SELL_STOP / SELL_LIMIT entry = raw_entry
+
+BUY  SL = raw_sl
+BUY  TP = raw_tp
+
+SELL SL = raw_sl + spread
+SELL TP = raw_tp + spread
+```
+
+Use the helper:
+
+```python
+prices = bid_chart_to_mt5_order_prices(
+    side="SELL",
+    entry_execution_mode="pending",
+    raw_entry=1.1000,
+    raw_sl=1.1050,
+    raw_tp=1.0900,
+    spread_price=0.0002,
+)
+# SELL pending entry stays 1.1000.
+# SELL SL becomes 1.1052 and SELL TP becomes 1.0902 because the closing side is Ask.
+```
+
+Do not use a symmetric add/subtract rule. Buy pending entries trigger on Ask; sell pending entries
+trigger on Bid. BUY SL/TP closes on Bid; SELL SL/TP closes on Ask.
 
 ## MT5 Account/Magic State Pattern
 

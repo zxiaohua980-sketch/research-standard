@@ -115,6 +115,13 @@ SELL SL/TP raw levels = desired Ask exit trigger prices
 
 Use `broker_bidask_from_bid_chart` only when the strategy explicitly outputs Bid-side bar/chart
 levels. In that case the spread must still come from the current live tick, not a historical average.
+The runtime should also verify:
+
+```text
+symbol_info(symbol).chart_mode == SYMBOL_CHART_MODE_BID
+```
+
+before applying Bid-chart spread conversion in a live/demo EXE.
 ## Bid-Chart Pending Entry And SL/TP Pattern
 
 For MT5 bid-chart raw levels:

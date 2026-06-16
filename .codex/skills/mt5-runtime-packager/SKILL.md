@@ -275,6 +275,16 @@ If `signal_price_basis` is missing or unknown, an order-capable runtime must blo
 Do **not** default an EXE to bid-chart conversion silently. Bid-chart conversion is allowed only when
 the strategy explicitly says its raw levels come from MT5 OTC Bid bars/closed candles.
 
+If the runtime selects a Bid-bar conversion policy such as `broker_bidask_from_bid_chart`, it must
+also verify the live MT5 symbol metadata before sending orders:
+
+```text
+symbol_info(symbol).chart_mode == SYMBOL_CHART_MODE_BID
+```
+
+If `chart_mode` is not Bid, unknown, or unavailable, the runtime must block or quarantine order
+sending for that symbol instead of silently applying Bid-chart spread conversion.
+
 Official MT5 order mechanics to respect in code:
 
 ```text
@@ -334,6 +344,13 @@ This table is a conversion from Bid-side signal levels into MT5 trigger-side ord
 not a live order-source default. If a strategy uses Ask levels, midpoint levels, Last/exchange prices,
 or already executable trigger-side levels, it must declare another `signal_price_basis` and provide
 a separate audited conversion table.
+
+The runtime must also prove the symbol is actually a Bid-chart symbol at startup/order time when
+this policy is selected:
+
+```text
+symbol_info(symbol).chart_mode == SYMBOL_CHART_MODE_BID
+```
 
 ### 中文口径：实盘 EXE 不能默认“历史 Bid 图表”
 
@@ -404,6 +421,7 @@ signal_price_basis = broker_trigger_side
 pending_price_policy = broker_trigger_side
 sltp_price_policy = broker_exit_trigger_side
 spread_price_source = mt5_tick
+require_chart_mode_match = true
 reject_if_adjusted_sl_invalid = true
 min_pending_distance_points_buffer = 0
 ```
@@ -413,6 +431,7 @@ Audit requirements:
 - list formulas for market/open entry, BUY_STOP, SELL_STOP, BUY_LIMIT, SELL_LIMIT, BUY SL/TP and SELL SL/TP;
 - prove every order decision fetched a fresh `symbol_info_tick()` and logged bid/ask/spread/tick time;
 - prove whether raw levels are broker trigger-side prices or Bid-side levels before applying any spread conversion;
+- if a Bid-chart conversion policy is selected, prove `symbol_info(symbol).chart_mode == SYMBOL_CHART_MODE_BID`;
 - prove adjusted long SL remains below entry and adjusted short SL remains above entry;
 - prove broker stops-level/min-distance checks run after any adjustment;
 - prove order journal records raw basis, raw level, adjusted level, live bid/ask and spread;

@@ -460,6 +460,28 @@ def broker_trigger_side_order_prices(
     }
 
 
+def symbol_chart_mode_snapshot(mt5: Any, symbol: str) -> dict[str, Any]:
+    """Return MT5 chart-mode metadata for one symbol.
+
+    Useful when a runtime wants to prove that a Bid-bar conversion policy is
+    valid on the current live symbol before applying spread adjustments derived
+    from Bid-side bar levels.
+    """
+    info = mt5.symbol_info(symbol)
+    if info is None:
+        raise RuntimeError(f"symbol_info unavailable for {symbol}")
+    chart_mode = getattr(info, "chart_mode", None)
+    bid_const = getattr(mt5, "SYMBOL_CHART_MODE_BID", None)
+    last_const = getattr(mt5, "SYMBOL_CHART_MODE_LAST", None)
+    return {
+        "symbol": symbol,
+        "chart_mode": chart_mode,
+        "symbol_chart_mode_bid": bid_const,
+        "symbol_chart_mode_last": last_const,
+        "is_bid_chart_mode": chart_mode == bid_const if bid_const is not None else None,
+    }
+
+
 def min_pending_distance_from_symbol_info(
     symbol_info: Any,
     *,

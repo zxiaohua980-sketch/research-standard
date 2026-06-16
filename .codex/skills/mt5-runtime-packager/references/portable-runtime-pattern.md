@@ -94,6 +94,16 @@ def resolve_runtime_path(config_path: Path, raw: str) -> Path:
     return config_path.parent / path
 ```
 
+## Onefile vs Onedir Runtime Tradeoff
+
+For continuous MT5 monitors, prefer a single-process `onedir/standalone` package unless the user
+explicitly prioritizes one-file transport.
+
+- `onefile` often shows a bootloader parent process plus the child runtime process during execution.
+- `onedir` usually runs as one long-lived runtime process with one primary EXE plus a dependency
+  directory such as `_internal\`.
+- A visible two-PID pattern from `onefile` alone is not enough to declare duplicate-instance risk.
+
 ## Operator Deliverable Verification
 
 `dist` may contain developer/build artifacts. The final user-facing operator folder must be a
@@ -102,8 +112,17 @@ separate clean portable/release folder.
 Minimum operator contents:
 
 ```text
-package\
+onefile_minimal\
   runtime.exe
+  config.ini
+  logs\
+  data_cache\   # optional; only if config uses it
+```
+
+```text
+onedir_single_process\
+  runtime.exe
+  _internal\    # or runtime_libs\
   config.ini
   logs\
   data_cache\   # optional; only if config uses it

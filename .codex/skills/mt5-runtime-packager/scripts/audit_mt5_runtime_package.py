@@ -182,6 +182,7 @@ def portable_operator_shape(root: Path) -> tuple[bool, str]:
             details.append(f"logs has {len(log_entries)} item(s)")
 
     config_text = read(root / "config.ini")
+    package_profile = (config_value(config_text, "package_profile") or "").strip().lower()
     data_cache_value = config_value(config_text, "data_cache_dir")
     data_cache = root / "data_cache"
     if data_cache_value:
@@ -201,12 +202,18 @@ def portable_operator_shape(root: Path) -> tuple[bool, str]:
         details.append("forbidden operator artifacts: " + ", ".join(forbidden[:8]))
 
     allowed_top_level = {"config.ini", "logs", "data_cache"}
+    if package_profile == "onedir_single_process":
+        allowed_top_level.update({"_internal", "runtime_libs", "lib"})
     allowed_top_level.update(path.name for path in exe_files)
     extras = [item.name for item in root.iterdir() if item.name not in allowed_top_level]
     if extras:
         details.append("unexpected top-level operator files/dirs: " + ", ".join(sorted(extras)[:8]))
 
-    return not details, "; ".join(details) if details else "one EXE + config.ini + empty logs + optional empty data_cache"
+    if details:
+        return False, "; ".join(details)
+    if package_profile == "onedir_single_process":
+        return True, "one EXE + support dir + config.ini + empty logs + optional empty data_cache"
+    return True, "one EXE + config.ini + empty logs + optional empty data_cache"
 
 
 def is_absolute_or_local_path(value: str) -> bool:
@@ -352,6 +359,18 @@ def main() -> int:
             "runtime smoke/account snapshot controls are config-visible"
             if not missing_runtime_smoke
             else "missing " + ", ".join(missing_runtime_smoke)
+        ),
+    )
+    packaging_keys = ["package_profile", "single_instance_guard", "single_instance_scope"]
+    missing_packaging_keys = [key for key in packaging_keys if not config_has_key(config_text, key)]
+    result(
+        rows,
+        "PASS" if not missing_packaging_keys else "WARN",
+        "packaging_profile_config_visible",
+        (
+            "package profile and single-instance controls are config-visible"
+            if not missing_packaging_keys
+            else "missing " + ", ".join(missing_packaging_keys)
         ),
     )
 

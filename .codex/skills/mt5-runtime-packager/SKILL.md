@@ -19,9 +19,9 @@ Before touching a trading runtime, obey the project `AGENTS.md` and registry. St
 4. Fix portability before packaging. Hardcoded MT5 terminal IDs, user-specific `MetaQuotes\Terminal\<hash>` paths, repo-root fallbacks, and machine-local data paths are blockers.
 5. If the runtime needs MT5 API OHLC, Python ZigZag/fractal calculation, or demo order management helpers, read `references/mt5-runtime-common-code.md` and copy/adapt `scripts/mt5_runtime_common.py` into the runtime staging folder.
 6. Do not open MT5 for every package build. First run an offline/static preflight that does not call `mt5.initialize()`: syntax/import safety, config fields, path portability, risk formula code paths, pending-order formula code paths, signal-ledger code paths, and portable-folder hygiene. Run MT5 source/EXE smoke only when the user explicitly asks to execute the runtime, when DEMO order testing is authorized, or when verifying the deliverable on the target machine.
-7. Package with PyInstaller from a clean staging directory only after the offline/static preflight passes. Copy only required strategy/runtime modules and shared helpers.
+7. Package with PyInstaller from a clean staging directory only after the offline/static preflight passes. Copy only required strategy/runtime modules and shared helpers. For always-on MT5 monitors, prefer a single-process `onedir/standalone` package over `onefile` unless the user explicitly prioritizes a single-file transport contract.
 8. Keep `config.ini` external beside the EXE. Never bury machine-specific settings, account identity, risk limits, refresh interval, magic number, comment prefix, or MT5 paths inside the binary.
-9. The modern operator deliverable is opened by double-clicking the EXE. BAT files are optional legacy wrappers only and must not be the primary contract.
+9. The modern operator deliverable is opened by double-clicking the EXE. BAT files are optional legacy wrappers only and must not be the primary contract. A visible “two PID” pattern from `onefile` bootloader parent/child is not by itself a duplicate-instance bug.
 10. Verify cost-inclusive position sizing before any order-capable runtime is packaged: lots must equal configured risk cash divided by total per-lot risk, where total per-lot risk includes entry-to-SL price loss, commission, configured/fetched spread, and slippage estimate. XAUUSD and BTCUSD may be commission-free only when explicitly configured.
 11. Verify entry price construction before any order-capable runtime is packaged. Market/open-price entries and pending-order entries are different contracts. A market/open-price entry must not reuse the pending-order `entry +/- spread` adjustment; pending orders must declare their own price basis, spread source, spread add/no-add rules, broker minimum-distance handling, and tick-level trigger watch for entry, SL and TP.
 12. Verify account reconciliation, persistent signal execution ledger, and outage recovery behavior before any monitor is allowed to place demo orders.
@@ -44,11 +44,20 @@ The EXE launched by double-click must:
 - store runtime outputs under the copied EXE folder, not the original repo or build folder;
 - write fatal startup exceptions to `logs\fatal_error_YYYYMMDD_HHMMSS.log` and keep the console open long enough for the operator to read the error.
 
-The required default operator folder contract is:
+Two supported operator folder contracts are:
 
 ```text
-package\
+onefile_minimal\
   StrategyRuntime.exe
+  config.ini
+  logs\
+  data_cache\     # optional; only if the runtime config uses it
+```
+
+```text
+onedir_single_process\
+  StrategyRuntime.exe
+  _internal\      # or runtime_libs\, packaged dependencies/support files
   config.ini
   logs\
   data_cache\     # optional; only if the runtime config uses it
@@ -58,6 +67,10 @@ There must be exactly one primary `.exe` in the operator folder. It must be self
 double-clicked. Optional BAT/CMD/PowerShell wrappers may exist only outside the operator folder
 under a development/build area such as `dev_tools\` or `legacy_wrappers\`; they must not be copied
 into the final folder handed to the user.
+
+If `onefile` is used, a parent bootloader process plus the child runtime process may both remain
+visible during execution. When the user wants lower resource usage and a truly single-process
+long-running monitor, use `onedir_single_process` instead.
 
 After a real package is created, run this EXE immediately from the operator folder or from a
 temporary copy with the same beside-EXE `config.ini`. Inspect `logs\` before handoff. If any fatal
@@ -122,6 +135,7 @@ Keep old BAT names only as development/legacy wrappers if users already have sho
 
 - identity: `strategy_id`, `runtime_id`, `instance_name`, `magic_number`, `comment_prefix`, `mt5_comment_max_length`;
 - runtime: `mode`, `refresh_seconds`, `terminal_path`, `timezone`, `console_live_output`, `pending_monitor_mode=tick`, `tick_poll_interval_ms`;
+- packaging: `package_profile=onedir_single_process|onefile_minimal`, `single_instance_guard`, `single_instance_scope`;
 - runtime smoke: `run_mt5_smoke_on_build=false`, `expected_account_server`, `expected_login`, `print_account_magic_snapshot`, `write_account_magic_snapshot`, `require_trade_allowed_for_orders`, `require_zero_magic_positions_before_smoke`, `require_zero_magic_orders_before_smoke`;
 - market data: `data_source=mt5_api`, `bars_to_keep=3000`, `cache_refresh_bars`, `data_cache_dir=.\data_cache`, `exclude_current_bar=true`, `atomic_cache_write=true`;
 - order limits: `order_enabled`, `risk_cash_per_order`, `max_volume_per_order`, `max_total_volume`, `max_positions_total`, `max_positions_per_symbol`, `max_new_orders_per_cycle`;
@@ -134,6 +148,29 @@ Keep old BAT names only as development/legacy wrappers if users already have sho
 - safety: `kill_switch`, `allow_demo_trade`, `allow_live_trade`, `dry_run_enforce`.
 
 The account type is read and printed from MT5 at runtime. Do not infer DEMO/REAL safety from the EXE filename or BAT name. Trading permission is the intersection of MT5 account state, config gates, and project policy.
+
+## Packaging Profile Contract
+
+Use one of two explicit profiles:
+
+### `onedir_single_process` — recommended for continuous MT5 monitors
+
+- one primary EXE;
+- one dependency/support directory such as `_internal\`;
+- external `config.ini`;
+- empty `logs\` and optional empty `data_cache\`;
+- no BAT/CMD/PS1 wrappers in the operator folder;
+- expected to run as a single long-lived runtime process.
+
+### `onefile_minimal` — only when single-file transport is explicitly preferred
+
+- one primary EXE;
+- external `config.ini`;
+- empty `logs\` and optional empty `data_cache\`;
+- may show bootloader parent + child processes during runtime.
+
+If the user says “不要双进程”, “节省内存”, “单进程”, “resource usage”, or similar, choose
+`onedir_single_process` unless they explicitly insist on a onefile-only package.
 
 ## Cost-Inclusive Position Sizing Contract
 

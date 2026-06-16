@@ -279,6 +279,24 @@ SELL sl = raw_sl + spread_price     # ADD spread_price
 SELL tp = raw_tp + spread_price     # ADD spread_price
 ```
 
+### 点差来源与加减口径（必须明确）
+
+- `spread_price` 的默认来源：
+  `spread_price = symbol_info_tick(symbol).ask - symbol_info_tick(symbol).bid`
+
+- 在 `signal_price_basis=bid_chart` 下，执行面加减口径是：
+
+  - 市价/开仓：
+    `BUY` 用 `ask`，`SELL` 用 `bid`（不再手工加/减 spread）
+  - 挂单价：
+    - `BUY_STOP/BUY_LIMIT`：`raw_entry + spread_price`
+    - `SELL_STOP/SELL_LIMIT`：`raw_entry`（不加不减）
+  - 附带止损止盈（仓位已持仓后）：
+    - `BUY` SL/TP：`raw_sl`、`raw_tp`（不加不减）
+    - `SELL` SL/TP：`raw_sl + spread_price`、`raw_tp + spread_price`
+
+- 只有当策略原始信号不是 `bid_chart`（比如 `ask_chart`）时，才允许更换 `signal_price_basis` 并重写完整转换表；否则将出现“加/减”方向错配。
+
 Do not use one symmetric "add/subtract spread everywhere" rule. The correct adjustment depends on
 whether the order is a market/open entry, buy pending entry, sell pending entry, BUY position SL/TP,
 or SELL position SL/TP. Under the default `signal_price_basis=bid_chart` policy above, there is no

@@ -239,108 +239,148 @@ Audit requirements:
 - log raw signal open, broker tick bid/ask, selected execution price, and spread-risk-accounting
   mode for each attempted order.
 
-## Bid/Ask Spread Adjustment Contract
+## Live Bid/Ask Execution Basis Contract
 
-Default raw strategy levels are assumed to come from MT5 chart OHLC, which for FX/CFD symbols is
-normally bid-chart data. Under `signal_price_basis=bid_chart`, convert raw strategy levels to MT5
-execution/trigger sides like this:
+For an order-capable EXE, **live MT5 tick data is the execution authority**. Do not let historical
+OHLC, exported CSV, or an assumed chart basis decide the actual order price by itself.
 
-`spread_price` is a non-negative price distance, not an arbitrary sign:
+At every market entry, pending placement, pending retry, trigger-cross recovery, SL/TP attach, or
+SL/TP modify decision, fetch a fresh tick:
 
 ```text
-Primary live/order source:
-spread_price  = current tick.ask - current tick.bid
+live_bid = symbol_info_tick(symbol).bid
+live_ask = symbol_info_tick(symbol).ask
+spread_price = live_ask - live_bid
 spread_points = spread_price / symbol.point
-
-Fallback deterministic source:
-spread_price = configured fixed_spread_points_default * symbol.point
 ```
 
-The runtime must declare `spread_source=mt5_tick` for order-capable live/demo packages unless a
-deterministic fixed spread is explicitly selected for dry-run/backtest diagnostics. If
-`spread_source=mt5_tick`, read it from `symbol_info_tick(symbol).ask - symbol_info_tick(symbol).bid`
-at the order decision time. If using fixed points or a symbol override, log the exact config key.
-Always log: spread source, bid, ask, point, spread points, spread price, tick timestamp, and whether
-the spread value was used for price conversion, risk accounting, or both.
+Reject or quarantine the order if the tick is missing, stale, crossed (`ask < bid`), zero, or older
+than the configured maximum tick age. The runtime must log `live_bid`, `live_ask`, `spread_price`,
+tick timestamp, and whether any spread conversion was applied.
+
+The EXE must separate three concepts in config and logs:
+
+```ini
+[orders]
+live_quote_source = mt5_symbol_info_tick
+require_fresh_tick_before_order = true
+max_tick_age_ms = 2000
+signal_price_basis = broker_trigger_side   ; or mt5_otc_bid_bar_level / exchange_last_level
+pending_price_policy = broker_trigger_side ; or broker_bidask_from_bid_chart
+sltp_price_policy = broker_exit_trigger_side ; or broker_bidask_from_bid_chart
+spread_price_source = mt5_tick
+```
+
+If `signal_price_basis` is missing or unknown, an order-capable runtime must block order sending.
+Do **not** default an EXE to bid-chart conversion silently. Bid-chart conversion is allowed only when
+the strategy explicitly says its raw levels come from MT5 OTC Bid bars/closed candles.
+
+Official MT5 order mechanics to respect in code:
+
+```text
+BUY market entry uses Ask.
+SELL market entry uses Bid.
+BUY_STOP / BUY_LIMIT trigger on Ask.
+SELL_STOP / SELL_LIMIT trigger on Bid.
+BUY position SL/TP closes by selling, so the exit trigger is Bid.
+SELL position SL/TP closes by buying, so the exit trigger is Ask.
+```
+
+Therefore Stop-vs-Limit does **not** decide the spread sign. The trigger side decides it.
+
+### Recommended live-EXE policy: `broker_trigger_side`
+
+Use this when the strategy/runtime already computes levels in the broker's executable trigger side.
+No spread is added or subtracted to the order request price because the raw level is already the
+correct MT5 side:
 
 ```text
 MARKET / OPEN-PRICE ENTRY
-BUY  entry = current tick.ask   # no manual raw_open + spread
-SELL entry = current tick.bid   # no manual raw_open - spread
+BUY  entry = live_ask
+SELL entry = live_bid
 
-PENDING ENTRY
-BUY_STOP / BUY_LIMIT   entry = raw_entry + spread_price   # ADD spread_price
-SELL_STOP / SELL_LIMIT entry = raw_entry                  # ADD nothing, SUBTRACT nothing
+PENDING ENTRY, raw_entry already equals the broker trigger side
+BUY_STOP / BUY_LIMIT   price = desired Ask trigger price
+SELL_STOP / SELL_LIMIT price = desired Bid trigger price
 
-ATTACHED SL/TP AFTER POSITION OPENS
-BUY  sl = raw_sl                    # ADD nothing, SUBTRACT nothing
-BUY  tp = raw_tp                    # ADD nothing, SUBTRACT nothing
-SELL sl = raw_sl + spread_price     # ADD spread_price
-SELL tp = raw_tp + spread_price     # ADD spread_price
+ATTACHED SL/TP, raw_sl/raw_tp already equal the broker exit trigger side
+BUY  SL/TP = desired Bid exit trigger price
+SELL SL/TP = desired Ask exit trigger price
 ```
 
-### 点差来源与加减口径（必须明确）
+This is the safest default for live/demo EXE packaging because the order code works directly with
+current `symbol_info_tick().bid/ask` and does not infer execution prices from historical bars.
 
-- `spread_price` 的默认来源：
-  `spread_price = symbol_info_tick(symbol).ask - symbol_info_tick(symbol).bid`
+### Optional conversion policy: `broker_bidask_from_bid_chart`
 
-- 在 `signal_price_basis=bid_chart` 下，执行面加减口径是：
+Use this only when raw strategy levels are explicitly Bid-side levels, for example levels derived
+from MT5 OTC Forex/CFD closed bars or a Bid chart. The live tick is still the source of spread.
 
-  - 市价/开仓：
-    `BUY` 用 `ask`，`SELL` 用 `bid`（不再手工加/减 spread）
-  - 挂单价：
-    - `BUY_STOP/BUY_LIMIT`：`raw_entry + spread_price`
-    - `SELL_STOP/SELL_LIMIT`：`raw_entry`（不加不减）
-  - 附带止损止盈（仓位已持仓后）：
-    - `BUY` SL/TP：`raw_sl`、`raw_tp`（不加不减）
-    - `SELL` SL/TP：`raw_sl + spread_price`、`raw_tp + spread_price`
+```text
+spread_price = live_ask - live_bid
 
-- 只有当策略原始信号不是 `bid_chart`（比如 `ask_chart`）时，才允许更换 `signal_price_basis` 并重写完整转换表；否则将出现“加/减”方向错配。
+PENDING ENTRY, raw_entry is a Bid-side level
+BUY_STOP / BUY_LIMIT   entry = raw_entry + spread_price
+SELL_STOP / SELL_LIMIT entry = raw_entry
 
-Do not use one symmetric "add/subtract spread everywhere" rule. The correct adjustment depends on
-whether the order is a market/open entry, buy pending entry, sell pending entry, BUY position SL/TP,
-or SELL position SL/TP. Under the default `signal_price_basis=bid_chart` policy above, there is no
-"subtract spread" case. Any strategy that wants a different source basis such as ask-chart,
-mid-price or already-executable prices must declare a different `signal_price_basis` and provide a
-separate audited conversion table.
-
-Required config fields:
-
-```ini
-[orders]
-signal_price_basis = bid_chart
-pending_price_policy = broker_bidask_from_bid_chart
-sltp_price_policy = broker_bidask_from_bid_chart
-spread_price_source = mt5_tick
-adjust_buy_pending_entry_for_spread = true
-adjust_sell_pending_entry_for_spread = false
-adjust_buy_sltp_for_spread = false
-adjust_sell_sltp_for_spread = true
+ATTACHED SL/TP, raw_sl/raw_tp are Bid-side levels
+BUY  sl = raw_sl
+BUY  tp = raw_tp
+SELL sl = raw_sl + spread_price
+SELL tp = raw_tp + spread_price
 ```
 
-If raw levels are not bid-chart levels, the config must say so with `signal_price_basis`, and the
-runtime must document the equivalent conversion. `conservative_full_spread` is a legacy/testing
-policy only and must not be used as the default for MT5 order-capable packages.
+This table is a conversion from Bid-side signal levels into MT5 trigger-side order prices. It is
+not a live order-source default. If a strategy uses Ask levels, midpoint levels, Last/exchange prices,
+or already executable trigger-side levels, it must declare another `signal_price_basis` and provide
+a separate audited conversion table.
+
+### 中文口径：实盘 EXE 不能默认“历史 Bid 图表”
+
+- 实盘/模拟下单 EXE 的权威价格来源是 `symbol_info_tick()` 的实时 `bid/ask`。
+- `raw_entry/raw_sl/raw_tp` 必须声明来源：它到底是 Ask 触发价、Bid 触发价、Bid K线价、还是其他价格。
+- 如果 raw 已经是 MT5 触发侧价格：不要加减点差。
+- 如果 raw 是 Bid K线/图表价：BUY 挂单加 spread，SELL 挂单不加；BUY SL/TP 不加，SELL SL/TP 加 spread。
+- Stop 和 Limit 的点差方向不相反；BUY/SELL 和触发侧才决定加减。
 
 ## Pending Order Price Contract
 
-Pending order prices must be deterministic and config-driven. Do not hide spread adjustment
-inside ad-hoc code.
+Pending order prices must be deterministic, live-tick based, and config-driven. Do not hide spread
+adjustment inside ad-hoc code.
 
-First declare the signal price basis:
+First declare the signal price basis and execution policy:
 
 ```ini
 [orders]
-signal_price_basis = bid_chart
-pending_price_policy = broker_bidask_from_bid_chart
+live_quote_source = mt5_symbol_info_tick
+require_fresh_tick_before_order = true
+signal_price_basis = broker_trigger_side
+pending_price_policy = broker_trigger_side
+sltp_price_policy = broker_exit_trigger_side
 spread_price_source = mt5_tick
 ```
 
 Supported policies:
 
+### `broker_trigger_side`
+
+Use this for live/demo EXE packaging when the runtime computes order levels directly on the MT5
+trigger side:
+
+```text
+BUY_STOP / BUY_LIMIT   pending_entry = desired Ask trigger price
+SELL_STOP / SELL_LIMIT pending_entry = desired Bid trigger price
+BUY  position sl/tp = desired Bid exit trigger price
+SELL position sl/tp = desired Ask exit trigger price
+```
+
+No spread conversion is allowed under this policy, because the level is already on the correct side.
+The audit must prove the runtime calculates or validates these levels from fresh `symbol_info_tick()`
+bid/ask data.
+
 ### `broker_bidask_from_bid_chart`
 
-Use this when raw signal levels are MT5 bid-chart levels:
+Use this only when raw signal levels are explicitly Bid-side levels:
 
 ```text
 BUY_STOP / BUY_LIMIT   pending_entry = raw_entry + spread_price
@@ -350,47 +390,33 @@ BUY  position sl/tp = raw_sl / raw_tp
 SELL position sl/tp = raw_sl + spread_price / raw_tp + spread_price
 ```
 
-This is the default exact MT5 bid/ask conversion for bid-chart strategy levels.
+This is exact MT5 bid/ask conversion for Bid-side strategy levels, not the default live-EXE order
+source.
 
-### `broker_bidask_exact`
-
-Use this when raw levels are explicitly bid-chart levels and the runtime wants to model MT5
-bid/ask trigger mechanics directly:
-
-```text
-BUY  entry executes on ask; buy pending entry may need raw_entry + spread_price.
-BUY  SL/TP close on bid; raw bid-chart SL/TP usually stay at raw_sl/raw_tp.
-SELL entry executes on bid; sell pending entry usually stays at raw_entry.
-SELL SL/TP close on ask; raw bid-chart SL/TP may need + spread_price.
-```
-
-If this policy is selected, the runtime must log which MT5 side triggers each level and the
-audit must verify it against `symbol_info_tick().bid/ask`, not just chart OHLC.
-
-Required config fields:
+Required config fields for order-capable runtimes:
 
 ```ini
 [orders]
-pending_price_policy = broker_bidask_from_bid_chart
-sltp_price_policy = broker_bidask_from_bid_chart
-signal_price_basis = bid_chart
+live_quote_source = mt5_symbol_info_tick
+require_fresh_tick_before_order = true
+max_tick_age_ms = 2000
+signal_price_basis = broker_trigger_side
+pending_price_policy = broker_trigger_side
+sltp_price_policy = broker_exit_trigger_side
 spread_price_source = mt5_tick
-adjust_buy_pending_entry_for_spread = true
-adjust_sell_pending_entry_for_spread = false
-adjust_buy_sltp_for_spread = false
-adjust_sell_sltp_for_spread = true
 reject_if_adjusted_sl_invalid = true
 min_pending_distance_points_buffer = 0
 ```
 
 Audit requirements:
 
-- list formulas for market/open entry, BUY_STOP, SELL_STOP, BUY SL/TP and SELL SL/TP;
+- list formulas for market/open entry, BUY_STOP, SELL_STOP, BUY_LIMIT, SELL_LIMIT, BUY SL/TP and SELL SL/TP;
+- prove every order decision fetched a fresh `symbol_info_tick()` and logged bid/ask/spread/tick time;
+- prove whether raw levels are broker trigger-side prices or Bid-side levels before applying any spread conversion;
 - prove adjusted long SL remains below entry and adjusted short SL remains above entry;
-- prove broker stops-level/min-distance checks run after adjustment;
-- prove order journal records both raw and adjusted levels;
+- prove broker stops-level/min-distance checks run after any adjustment;
+- prove order journal records raw basis, raw level, adjusted level, live bid/ask and spread;
 - reject packaging if policy or price basis is missing for order-capable runtimes.
-
 ## Pending Too-Close And Tick-Level Trigger Contract
 
 Pending orders cannot be managed only once per minute. The bar/closed-candle scan may still run on

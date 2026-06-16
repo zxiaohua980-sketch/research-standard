@@ -557,6 +557,9 @@ def main() -> int:
         ),
     )
     pending_price_keys = [
+        "live_quote_source",
+        "require_fresh_tick_before_order",
+        "max_tick_age_ms",
         "pending_price_policy",
         "sltp_price_policy",
         "signal_price_basis",
@@ -573,8 +576,12 @@ def main() -> int:
         "adjusted_entry",
         "adjusted_sl",
         "adjusted_tp",
+        "broker_trigger_side",
+        "broker_exit_trigger_side",
         "broker_bidask_from_bid_chart",
         "broker_bidask_exact",
+        "live_quote_source",
+        "symbol_info_tick",
         "buy_pending_entry",
         "sell_pending_entry",
         "sell_sltp",

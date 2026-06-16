@@ -405,6 +405,61 @@ def bid_chart_to_mt5_order_prices(
     }
 
 
+def broker_trigger_side_order_prices(
+    *,
+    side: str,
+    raw_entry: float | None = None,
+    raw_sl: float | None = None,
+    raw_tp: float | None = None,
+    entry_execution_mode: str = "pending",
+) -> dict[str, Any]:
+    """Return order prices when raw levels are already MT5 trigger-side prices.
+
+    This is the recommended live/demo EXE policy when the strategy/runtime
+    computes prices directly from a fresh broker tick:
+
+    - BUY pending entry raw_entry is the desired Ask trigger price.
+    - SELL pending entry raw_entry is the desired Bid trigger price.
+    - BUY SL/TP raw levels are desired Bid exit trigger prices.
+    - SELL SL/TP raw levels are desired Ask exit trigger prices.
+
+    No spread is added or subtracted here. Spread conversion belongs only to
+    explicit basis conversions such as Bid-bar levels -> broker trigger side.
+    """
+    normalized_side = side.strip().upper()
+    if normalized_side not in {"BUY", "SELL"}:
+        raise ValueError(f"unsupported side: {side}")
+    mode = entry_execution_mode.strip().lower()
+    if mode not in {"pending", "market", "open", "open_price"}:
+        raise ValueError(f"unsupported entry_execution_mode: {entry_execution_mode}")
+
+    adjusted_entry: float | None = None
+    if raw_entry is not None and mode == "pending":
+        adjusted_entry = float(raw_entry)
+
+    return {
+        "side": normalized_side,
+        "signal_price_basis": "broker_trigger_side",
+        "pending_price_policy": "broker_trigger_side",
+        "sltp_price_policy": "broker_exit_trigger_side",
+        "entry_execution_mode": mode,
+        "spread_price": 0.0,
+        "raw_entry": raw_entry,
+        "raw_sl": raw_sl,
+        "raw_tp": raw_tp,
+        "adjusted_entry": adjusted_entry,
+        "adjusted_sl": None if raw_sl is None else float(raw_sl),
+        "adjusted_tp": None if raw_tp is None else float(raw_tp),
+        "rules": {
+            "buy_pending_entry": "raw_entry is desired Ask trigger price",
+            "sell_pending_entry": "raw_entry is desired Bid trigger price",
+            "buy_sltp": "raw_sl/raw_tp are desired Bid exit triggers",
+            "sell_sltp": "raw_sl/raw_tp are desired Ask exit triggers",
+            "spread_conversion": "none; levels already use broker trigger side",
+        },
+    }
+
+
 def min_pending_distance_from_symbol_info(
     symbol_info: Any,
     *,

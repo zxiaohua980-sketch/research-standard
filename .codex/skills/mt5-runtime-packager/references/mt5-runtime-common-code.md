@@ -85,6 +85,36 @@ uses the executable side returned by the broker tick. Use `raw_chart_add_spread_
 risk is calculated from raw bid-chart levels and spread is not already embedded in entry-to-SL
 distance.
 
+
+## Live EXE Price-Basis Pattern
+
+For an order-capable EXE, fetch `symbol_info_tick(symbol)` at every order decision and treat live
+`bid/ask` as execution authority. Do not silently assume raw levels are historical Bid bars.
+
+Recommended live config when the strategy computes executable trigger-side levels:
+
+```ini
+[orders]
+live_quote_source = mt5_symbol_info_tick
+require_fresh_tick_before_order = true
+max_tick_age_ms = 2000
+signal_price_basis = broker_trigger_side
+pending_price_policy = broker_trigger_side
+sltp_price_policy = broker_exit_trigger_side
+spread_price_source = mt5_tick
+```
+
+Under `broker_trigger_side`, no spread is added/subtracted to order request prices:
+
+```text
+BUY_STOP / BUY_LIMIT   raw_entry = desired Ask trigger price
+SELL_STOP / SELL_LIMIT raw_entry = desired Bid trigger price
+BUY  SL/TP raw levels = desired Bid exit trigger prices
+SELL SL/TP raw levels = desired Ask exit trigger prices
+```
+
+Use `broker_bidask_from_bid_chart` only when the strategy explicitly outputs Bid-side bar/chart
+levels. In that case the spread must still come from the current live tick, not a historical average.
 ## Bid-Chart Pending Entry And SL/TP Pattern
 
 For MT5 bid-chart raw levels:

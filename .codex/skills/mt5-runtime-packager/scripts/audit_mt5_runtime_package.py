@@ -361,16 +361,60 @@ def main() -> int:
             else "missing " + ", ".join(missing_runtime_smoke)
         ),
     )
-    packaging_keys = ["package_profile", "single_instance_guard", "single_instance_scope"]
+    packaging_keys = [
+        "package_profile",
+        "single_instance_guard",
+        "single_instance_scope",
+        "runtime_concurrency",
+        "tick_monitor_execution",
+        "background_worker_threads",
+    ]
     missing_packaging_keys = [key for key in packaging_keys if not config_has_key(config_text, key)]
     result(
         rows,
         "PASS" if not missing_packaging_keys else "WARN",
         "packaging_profile_config_visible",
         (
-            "package profile and single-instance controls are config-visible"
+            "package profile, single-instance controls, and concurrency defaults are config-visible"
             if not missing_packaging_keys
             else "missing " + ", ".join(missing_packaging_keys)
+        ),
+    )
+    runtime_concurrency = (config_value(config_text, "runtime_concurrency") or "").strip().lower()
+    tick_monitor_execution = (config_value(config_text, "tick_monitor_execution") or "").strip().lower()
+    background_worker_threads = (config_value(config_text, "background_worker_threads") or "").strip()
+    single_thread_default = (
+        runtime_concurrency == "single_thread"
+        and tick_monitor_execution == "inline_main_loop"
+        and background_worker_threads == "0"
+    )
+    result(
+        rows,
+        "PASS" if single_thread_default else "WARN",
+        "default_single_thread_runtime_profile",
+        (
+            "default runtime is declared as single-thread inline-main-loop with 0 background workers"
+            if single_thread_default
+            else "expected runtime_concurrency=single_thread, tick_monitor_execution=inline_main_loop, background_worker_threads=0"
+        ),
+    )
+    concurrency_markers = [
+        "threading.Thread",
+        "ThreadPoolExecutor",
+        "ProcessPoolExecutor",
+        "multiprocessing",
+        "asyncio.create_task",
+        "asyncio.gather(",
+    ]
+    found_concurrency_markers = [marker for marker in concurrency_markers if marker in executor_text]
+    result(
+        rows,
+        "PASS" if not found_concurrency_markers else "WARN",
+        "executor_concurrency_markers_review",
+        (
+            "no obvious thread/process-pool markers in executor"
+            if not found_concurrency_markers
+            else "review executor concurrency markers: " + ", ".join(found_concurrency_markers)
         ),
     )
 

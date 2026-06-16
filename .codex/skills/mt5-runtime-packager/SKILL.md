@@ -19,7 +19,7 @@ Before touching a trading runtime, obey the project `AGENTS.md` and registry. St
 4. Fix portability before packaging. Hardcoded MT5 terminal IDs, user-specific `MetaQuotes\Terminal\<hash>` paths, repo-root fallbacks, and machine-local data paths are blockers.
 5. If the runtime needs MT5 API OHLC, Python ZigZag/fractal calculation, or demo order management helpers, read `references/mt5-runtime-common-code.md` and copy/adapt `scripts/mt5_runtime_common.py` into the runtime staging folder.
 6. Do not open MT5 for every package build. First run an offline/static preflight that does not call `mt5.initialize()`: syntax/import safety, config fields, path portability, risk formula code paths, pending-order formula code paths, signal-ledger code paths, and portable-folder hygiene. Run MT5 source/EXE smoke only when the user explicitly asks to execute the runtime, when DEMO order testing is authorized, or when verifying the deliverable on the target machine.
-7. Package with PyInstaller from a clean staging directory only after the offline/static preflight passes. Copy only required strategy/runtime modules and shared helpers. For always-on MT5 monitors, prefer a single-process `onedir/standalone` package over `onefile` unless the user explicitly prioritizes a single-file transport contract.
+7. Package with PyInstaller from a clean staging directory only after the offline/static preflight passes. Copy only required strategy/runtime modules and shared helpers. For always-on MT5 monitors, prefer a single-process, single-thread `onedir/standalone` package over `onefile` unless the user explicitly prioritizes a single-file transport contract.
 8. Keep `config.ini` external beside the EXE. Never bury machine-specific settings, account identity, risk limits, refresh interval, magic number, comment prefix, or MT5 paths inside the binary.
 9. The modern operator deliverable is opened by double-clicking the EXE. BAT files are optional legacy wrappers only and must not be the primary contract. A visible “two PID” pattern from `onefile` bootloader parent/child is not by itself a duplicate-instance bug.
 10. Verify cost-inclusive position sizing before any order-capable runtime is packaged: lots must equal configured risk cash divided by total per-lot risk, where total per-lot risk includes entry-to-SL price loss, commission, configured/fetched spread, and slippage estimate. XAUUSD and BTCUSD may be commission-free only when explicitly configured.
@@ -69,8 +69,9 @@ under a development/build area such as `dev_tools\` or `legacy_wrappers\`; they 
 into the final folder handed to the user.
 
 If `onefile` is used, a parent bootloader process plus the child runtime process may both remain
-visible during execution. When the user wants lower resource usage and a truly single-process
-long-running monitor, use `onedir_single_process` instead.
+visible during execution. When the user wants lower resource usage and a truly single-process,
+single-thread long-running monitor, use `onedir_single_process` and keep runtime concurrency on the
+main loop by default.
 
 After a real package is created, run this EXE immediately from the operator folder or from a
 temporary copy with the same beside-EXE `config.ini`. Inspect `logs\` before handoff. If any fatal
@@ -134,7 +135,7 @@ Keep old BAT names only as development/legacy wrappers if users already have sho
 `config.ini` must be the operator control surface. At minimum it must externalize:
 
 - identity: `strategy_id`, `runtime_id`, `instance_name`, `magic_number`, `comment_prefix`, `mt5_comment_max_length`;
-- runtime: `mode`, `refresh_seconds`, `terminal_path`, `timezone`, `console_live_output`, `pending_monitor_mode=tick`, `tick_poll_interval_ms`;
+- runtime: `mode`, `refresh_seconds`, `terminal_path`, `timezone`, `console_live_output`, `pending_monitor_mode=tick`, `tick_poll_interval_ms`, `runtime_concurrency=single_thread`, `tick_monitor_execution=inline_main_loop`, `background_worker_threads=0`;
 - packaging: `package_profile=onedir_single_process|onefile_minimal`, `single_instance_guard`, `single_instance_scope`;
 - runtime smoke: `run_mt5_smoke_on_build=false`, `expected_account_server`, `expected_login`, `print_account_magic_snapshot`, `write_account_magic_snapshot`, `require_trade_allowed_for_orders`, `require_zero_magic_positions_before_smoke`, `require_zero_magic_orders_before_smoke`;
 - market data: `data_source=mt5_api`, `bars_to_keep=3000`, `cache_refresh_bars`, `data_cache_dir=.\data_cache`, `exclude_current_bar=true`, `atomic_cache_write=true`;
@@ -149,7 +150,7 @@ Keep old BAT names only as development/legacy wrappers if users already have sho
 
 The account type is read and printed from MT5 at runtime. Do not infer DEMO/REAL safety from the EXE filename or BAT name. Trading permission is the intersection of MT5 account state, config gates, and project policy.
 
-## Packaging Profile Contract
+## Packaging And Concurrency Profile Contract
 
 Use one of two explicit profiles:
 
@@ -161,6 +162,7 @@ Use one of two explicit profiles:
 - empty `logs\` and optional empty `data_cache\`;
 - no BAT/CMD/PS1 wrappers in the operator folder;
 - expected to run as a single long-lived runtime process.
+- default runtime concurrency should be `single_thread`.
 
 ### `onefile_minimal` — only when single-file transport is explicitly preferred
 
@@ -171,6 +173,51 @@ Use one of two explicit profiles:
 
 If the user says “不要双进程”, “节省内存”, “单进程”, “resource usage”, or similar, choose
 `onedir_single_process` unless they explicitly insist on a onefile-only package.
+
+If the user says “单线程”, “不要后台线程”, “不要并发”, or similar, keep:
+
+```ini
+[runtime]
+runtime_concurrency = single_thread
+tick_monitor_execution = inline_main_loop
+background_worker_threads = 0
+```
+
+Do not silently introduce per-symbol workers, background order threads, or a separate tick-monitor
+thread as the default operator contract.
+
+## Runtime Concurrency Contract
+
+Default operator-facing MT5 runtimes should be **single-thread** unless the user explicitly asks
+for a parallel design and the runtime has an audited reason to need it.
+
+Required config contract:
+
+```ini
+[runtime]
+runtime_concurrency = single_thread
+tick_monitor_execution = inline_main_loop
+background_worker_threads = 0
+```
+
+Meaning:
+
+- `runtime_concurrency = single_thread`: one main loop owns scan -> trigger watch -> reconcile -> log -> route order.
+- `tick_monitor_execution = inline_main_loop`: tick-level pending monitoring stays in the main loop; it is not a hidden background thread.
+- `background_worker_threads = 0`: no default thread pool, no per-symbol workers, no background order worker.
+
+Allowed exception model:
+
+- only when explicitly requested or clearly justified by workload;
+- concurrency mode must be config-visible;
+- order routing and signal-consumption ledger must remain serialized;
+- any extra threads/processes must be named in the audit so operators know the runtime is no longer the default single-thread profile.
+
+Audit requirements:
+
+- verify the config declares the single-thread default explicitly;
+- warn if executor code contains thread/process pool markers without an explicit concurrency override;
+- reject packaging claims that call the runtime “default” while hiding multi-thread behavior.
 
 ## Cost-Inclusive Position Sizing Contract
 
@@ -555,6 +602,12 @@ Read-only scanner defaults:
 
 ```ini
 mode = dry_run
+package_profile = onedir_single_process
+runtime_concurrency = single_thread
+tick_monitor_execution = inline_main_loop
+background_worker_threads = 0
+single_instance_guard = true
+single_instance_scope = exe_path
 allow_demo_trade = false
 allow_live_trade = false
 dry_run_enforce = true
@@ -608,6 +661,12 @@ If the user explicitly authorizes a DEMO-order deliverable, default config may i
 
 ```ini
 mode = demo_trade
+package_profile = onedir_single_process
+runtime_concurrency = single_thread
+tick_monitor_execution = inline_main_loop
+background_worker_threads = 0
+single_instance_guard = true
+single_instance_scope = exe_path
 allow_demo_trade = true
 allow_live_trade = false
 dry_run_enforce = false

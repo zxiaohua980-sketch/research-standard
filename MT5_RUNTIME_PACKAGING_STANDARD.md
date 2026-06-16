@@ -60,7 +60,7 @@ On double-click, the EXE must:
 - write fatal startup exceptions to `logs\fatal_error_YYYYMMDD_HHMMSS.log` and keep the
   console readable long enough for an operator to see the failure.
 
-The default portable **operator** folder contract is:
+The default portable **operator** folder contract for a continuous monitor is:
 
 ```text
 package\
@@ -101,7 +101,10 @@ caches, local test configs, or machine-specific files as the operator copy folde
 - identity: `strategy_id`, `runtime_id`, `instance_name`, `magic_number`, `comment_prefix`,
   `mt5_comment_max_length`;
 - runtime: `mode`, `refresh_seconds`, `terminal_path`, `timezone`, `console_live_output`,
-  `pending_monitor_mode=tick`, and `tick_poll_interval_ms`;
+  `pending_monitor_mode=tick`, `tick_poll_interval_ms`, `runtime_concurrency=single_thread`,
+  `tick_monitor_execution=inline_main_loop`, and `background_worker_threads=0`;
+- packaging: `package_profile=onedir_single_process|onefile_minimal`, `single_instance_guard`,
+  and `single_instance_scope`;
 - runtime smoke: `run_mt5_smoke_on_build=false`, `expected_account_server`, `expected_login`,
   `print_account_magic_snapshot`, `write_account_magic_snapshot`,
   `require_trade_allowed_for_orders`, `require_zero_magic_positions_before_smoke`, and
@@ -139,6 +142,34 @@ caches, local test configs, or machine-specific files as the operator copy folde
 
 The account type must be read from MT5 and printed at runtime. Do not infer DEMO/REAL status
 from the EXE name, BAT name, folder name, or config label.
+
+### Packaging And Concurrency Default
+
+Continuous MT5 monitors should default to a **single-process, single-thread** operator profile:
+
+```ini
+[runtime]
+package_profile = onedir_single_process
+runtime_concurrency = single_thread
+tick_monitor_execution = inline_main_loop
+background_worker_threads = 0
+single_instance_guard = true
+single_instance_scope = exe_path
+```
+
+This means one main runtime loop handles:
+
+- closed-bar signal scans;
+- tick-level pending-trigger watch;
+- reconciliation;
+- logging and status refresh;
+- serialized order routing.
+
+Tick-level pending monitoring is still mandatory, but by default it runs inside the same main
+loop rather than in a background thread. Additional threads/processes are allowed only as an
+explicit audited exception for a named reason such as CPU-bound preprocessing. Even then,
+`order_send` and final signal consumption must remain serialized so the runtime does not create
+duplicate opens.
 
 ### Cost-Inclusive Position Sizing
 

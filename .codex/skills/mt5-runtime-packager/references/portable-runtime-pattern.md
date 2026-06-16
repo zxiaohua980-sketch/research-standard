@@ -104,6 +104,20 @@ explicitly prioritizes one-file transport.
   directory such as `_internal\`.
 - A visible two-PID pattern from `onefile` alone is not enough to declare duplicate-instance risk.
 
+Default concurrency profile for continuous MT5 monitors:
+
+```ini
+[runtime]
+package_profile = onedir_single_process
+runtime_concurrency = single_thread
+tick_monitor_execution = inline_main_loop
+background_worker_threads = 0
+```
+
+- Keep signal scan, tick-level pending watch, reconciliation, logging, and order routing in one main loop by default.
+- Do not make tick monitoring imply a second background thread by default.
+- Extra threads/processes are an exception profile, not the default operator package.
+
 ## Operator Deliverable Verification
 
 `dist` may contain developer/build artifacts. The final user-facing operator folder must be a

@@ -2,17 +2,17 @@
 
 ## Purpose
 
-This standard governs Phase 3 MT5 dry-run/demo runtime packaging after a candidate has
+This standard governs Phase 3 MT5 dry-run/demo/live runtime packaging after a candidate has
 passed the required research gates. It converts a frozen candidate into a portable,
-auditable Windows EXE for dry-run or DEMO monitoring.
+auditable Windows EXE for dry-run, DEMO, or user-authorized LIVE monitoring/trading.
 
 Runtime packaging validates execution plumbing and operational safety. It does not validate
-strategy profitability, does not create OOS-Final evidence, and does not authorize REAL
-account trading.
+strategy profitability and does not create OOS-Final evidence. REAL account trading is allowed
+only through the explicit user-authorized `live_trade` path in `LIVE_TRADING_AUTHORIZATION_STANDARD.md`.
 
 ## Scope And Trigger
 
-Apply this standard whenever a task mentions EXE packaging, MT5 automatic trading, demo
+Apply this standard whenever a task mentions EXE packaging, MT5 automatic trading, demo/live
 orders, order monitoring, runtime monitoring, PyInstaller, portable MT5 runtime, or Chinese
 phrases such as:
 
@@ -38,7 +38,20 @@ Before packaging:
   candidates, risk model, and data boundary;
 - execution/runtime audit is required before any package can be called ready.
 
-If these are missing, the package status is `runtime_blocked`, not `demo_ready`.
+If these are missing, the package status is `runtime_blocked`, not `demo_ready` or `user_authorized_live_ready`.
+
+## User-Authorized LIVE Gate
+
+The old blanket REAL-account prohibition is removed. A package may be marked `user_authorized_live_ready` only when:
+
+- the exact EXE/config has passed static audit and direct EXE smoke/log check;
+- demo order path or equivalent runtime smoke has passed broker-state reconciliation;
+- the user explicitly requests live/实盘 for this strategy/runtime;
+- `config.ini` has `mode = live_trade`, `allow_live_trade = true`, and `live_trade_ack = I_ACCEPT_REAL_MONEY_RISK`;
+- expected account server/login are either configured and matched, or intentionally left blank by the user;
+- startup reconciliation, signal ledger, intent journal, max position/volume/order gates, cost-inclusive sizing, and kill switch are active.
+
+A REAL account is therefore a warning state that requires explicit authorization and config matching, not an automatic blocker. Stage 13 paperwork, Gate A/B forward sample size, or registry `production_live=false` must not mechanically block the user's own-capital live trial when the above technical safety gates pass.
 
 ## Direct EXE Contract
 
@@ -403,7 +416,7 @@ At minimum, a runtime that can send DEMO orders must create:
 Startup sequence:
 
 1. connect/reconnect MT5;
-2. reject REAL accounts unless a separate future live-deployment policy explicitly permits them;
+2. reject REAL accounts unless `mode=live_trade`, `allow_live_trade=true`, `live_trade_ack=I_ACCEPT_REAL_MONEY_RISK`, and the user has explicitly authorized live use;
 3. load local intent journal and quarantine corrupt partial records;
 4. query positions by magic;
 5. query pending orders by magic;
@@ -419,9 +432,9 @@ Broker state is authoritative. Local intent files are context, not the source of
 
 Order-capable runtimes must enforce:
 
-- REAL account hard rejection under the current research standard;
-- `allow_live_trade=false`;
-- DEMO order execution only when explicitly configured and authorized;
+- REAL account rejection by default, with user-authorized live override only through `mode=live_trade`, `allow_live_trade=true`, and `live_trade_ack=I_ACCEPT_REAL_MONEY_RISK`;
+- `allow_live_trade=false` as the default safe value, but `true` is allowed for an explicitly authorized live package;
+- DEMO/LIVE order execution only when explicitly configured and authorized;
 - `kill_switch=false`;
 - MT5 `trade_allowed=True`;
 - max position, max volume, and max new orders per cycle gates;
@@ -555,6 +568,7 @@ A package cannot be called `portable_package_ready` unless:
 - dry-run mode does not call `order_send`;
 - DEMO order smoke, when explicitly authorized, confirms open/modify/close by broker state,
   not retcode alone;
+- LIVE readiness, when explicitly authorized, confirms account identity, live config gates, startup reconciliation, and log/error status before any real order is allowed;
 - the deliverable copy folder is the minimal operator package, not `build`, `dist`, source root,
   or a folder full of helper BAT files.
 - smoke/log-check evidence is stored outside the final operator folder, and delivery `logs\` and
@@ -567,7 +581,9 @@ Use these labels:
 - `runtime_blocked`: entry gate, preflight, audit, or safety check failed;
 - `dry_run_ready`: direct EXE dry-run monitor passed, no order sending;
 - `demo_ready`: authorized DEMO order path passed broker-state reconciliation;
+- `user_authorized_live_ready`: exact EXE/config is configured for REAL trading by explicit user choice and passed live gate checks;
+- `live_trial_active`: REAL account runtime has started; results are real-money operational records, not backtest/OOS-Final proof;
 - `portable_package_ready`: portable folder and copy-path smoke passed.
 
-Demo/runtime logs remain `runtime_validation_not_oos_final`. They must not be reported as
-OOS-Final or live performance.
+Dry-run/demo/runtime logs remain `runtime_validation_not_oos_final`. User-authorized live logs are
+real-money operational evidence from activation time onward; they must not be mixed with backtest, demo, or OOS-Final claims.

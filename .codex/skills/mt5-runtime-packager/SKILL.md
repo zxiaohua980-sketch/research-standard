@@ -1,6 +1,6 @@
 ---
 name: mt5-runtime-packager
-description: Package, audit, or document MT5 Python runtime monitors as minimal portable EXE operator folders with one runnable EXE, beside-EXE config.ini, empty logs, no BAT/CMD/PS1 wrappers in the final folder, offline/static build checks that do not open MT5, runtime-only account/magic snapshots, cost-inclusive sizing, MT5 bid/ask-correct market/open entries, explicit spread source/sign rules, Buy Stop/Sell Stop and SL/TP spread handling, pending-too-close tick monitoring with market conversion when triggered, same-bar duplicate-order ledgers, reconciliation logs, demo-only safety gates, magic/comment namespaces, and terminal/data-path discovery. Use for MT5 runtime packaging, config.ini risk/order design, PyInstaller builds, demo order plumbing, portable EXEs, runtime smoke tests, moving runtimes to another computer, or Chinese requests such as 打包成exe文件, 模拟下单, 仓位计算, 手续费点差滑点, 挂单价格, 防止重复下单.
+description: Package, audit, or document MT5 Python runtime monitors as minimal portable EXE operator folders with one runnable EXE, beside-EXE config.ini, empty logs, no BAT/CMD/PS1 wrappers in the final folder, offline/static build checks that do not open MT5, runtime-only account/magic snapshots, cost-inclusive sizing, MT5 bid/ask-correct market/open entries, explicit spread source/sign rules, Buy Stop/Sell Stop and SL/TP spread handling, pending-too-close tick monitoring with market conversion when triggered, same-bar duplicate-order ledgers, reconciliation logs, demo/live safety gates, magic/comment namespaces, timeframe-qualified order comments, and terminal/data-path discovery. Use for MT5 runtime packaging, config.ini risk/order design, PyInstaller builds, demo order plumbing, portable EXEs, runtime smoke tests, moving runtimes to another computer, or Chinese requests such as 打包成exe文件, 模拟下单, 仓位计算, 手续费点差滑点, 挂单价格, 防止重复下单.
 ---
 
 # MT5 Runtime Packager
@@ -9,7 +9,7 @@ description: Package, audit, or document MT5 Python runtime monitors as minimal 
 
 Use this as an operational packaging skill, not as a strategy-validation skill.
 
-Before touching a trading runtime, obey the project `AGENTS.md` and registry. State the strategy stage, whether code/parameter changes are allowed, whether execution audit is required, and whether the work can contaminate forward-live results. Never create live-trading scripts, enable REAL-account trading, set `framework_start_time`, or treat demo/runtime logs as OOS-Final evidence.
+Before touching a trading runtime, obey the project `AGENTS.md` and registry. State the strategy stage, whether code/parameter changes are allowed, whether execution audit is required, and whether the work can contaminate forward-live results. Never enable REAL-account trading unless the user explicitly authorizes this exact runtime and the config satisfies the `live_trade` gates; never set `framework_start_time` silently or treat demo/runtime logs as OOS-Final evidence.
 
 ## Workflow
 
@@ -24,7 +24,7 @@ Before touching a trading runtime, obey the project `AGENTS.md` and registry. St
 9. The modern operator deliverable is opened by double-clicking the EXE. BAT files are optional legacy wrappers only and must not be the primary contract. A visible “two PID” pattern from `onefile` bootloader parent/child is not by itself a duplicate-instance bug.
 10. Verify cost-inclusive position sizing before any order-capable runtime is packaged: lots must equal configured risk cash divided by total per-lot risk, where total per-lot risk includes entry-to-SL price loss, commission, configured/fetched spread, and slippage estimate. XAUUSD and BTCUSD may be commission-free only when explicitly configured.
 11. Verify entry price construction before any order-capable runtime is packaged. Market/open-price entries and pending-order entries are different contracts. A market/open-price entry must not reuse the pending-order `entry +/- spread` adjustment; pending orders must declare their own price basis, spread source, spread add/no-add rules, broker minimum-distance handling, and tick-level trigger watch for entry, SL and TP.
-12. Verify account reconciliation, persistent signal execution ledger, and outage recovery behavior before any monitor is allowed to place demo orders.
+12. Verify account reconciliation, persistent signal execution ledger, and outage recovery behavior before any monitor is allowed to place demo or live orders.
 13. After every source or config-default fix, rebuild and re-run the final EXE from the deliverable folder; do not rely on a pre-rebuild source test.
 14. Build a clean portable **operator** deliverable folder for copying to another computer. The user-facing folder must be minimal: one immediately double-click runnable `.exe`, one beside-EXE `config.ini`, and an empty `logs\` directory. `data_cache\` is allowed only when the config/runtime needs it, and it must be empty at delivery. Do not put BAT/CMD/PowerShell wrappers in the operator folder.
 15. Immediately after a real package is built for handoff, run the final EXE once from the operator folder or a copy of it. Inspect the generated logs for fatal/error/traceback/exception signals. A package with log errors is not deliverable.
@@ -134,7 +134,7 @@ Keep old BAT names only as development/legacy wrappers if users already have sho
 
 `config.ini` must be the operator control surface. At minimum it must externalize:
 
-- identity: `strategy_id`, `runtime_id`, `instance_name`, `magic_number`, `comment_prefix`, `mt5_comment_max_length`;
+- identity: `strategy_id`, `runtime_id`, `instance_name`, `magic_number`, `comment_prefix`, `mt5_comment_max_length`, and comment suffix/format fields that include the current timeframe;
 - runtime: `mode`, `refresh_seconds`, `terminal_path`, `timezone`, `console_live_output`, `pending_monitor_mode=tick`, `tick_poll_interval_ms`, `runtime_concurrency=single_thread`, `tick_monitor_execution=inline_main_loop`, `background_worker_threads=0`;
 - packaging: `package_profile=onedir_single_process|onefile_minimal`, `single_instance_guard`, `single_instance_scope`;
 - runtime smoke: `run_mt5_smoke_on_build=false`, `expected_account_server`, `expected_login`, `print_account_magic_snapshot`, `write_account_magic_snapshot`, `require_trade_allowed_for_orders`, `require_zero_magic_positions_before_smoke`, `require_zero_magic_orders_before_smoke`;
@@ -146,9 +146,9 @@ Keep old BAT names only as development/legacy wrappers if users already have sho
 - duplicate-signal prevention: `signal_execution_ledger_path`, `signal_key_fields`, `consume_signal_before_order_send=true`, `block_duplicate_signal_bar=true`;
 - reconciliation: `reconcile_on_startup`, `reconcile_each_cycle`, `recovery_lookback_days`, `history_future_buffer_hours`, `order_confirm_timeout_seconds`, `order_confirm_poll_interval_seconds`, `unknown_freeze_new_orders`;
 - logging: `log_dir=.\logs`, `runtime_log_enabled`, `error_log_enabled`, `reconciliation_log_enabled`, `order_journal_enabled`, `position_snapshot_enabled`;
-- safety: `kill_switch`, `allow_demo_trade`, `allow_live_trade`, `dry_run_enforce`.
+- safety: `kill_switch`, `allow_demo_trade`, `allow_live_trade`, `live_trade_ack`, `dry_run_enforce`.
 
-The account type is read and printed from MT5 at runtime. Do not infer DEMO/REAL safety from the EXE filename or BAT name. Trading permission is the intersection of MT5 account state, config gates, and project policy.
+The account type is read and printed from MT5 at runtime. Do not infer DEMO/REAL safety from the EXE filename or BAT name. Trading permission is the intersection of MT5 account state, config gates, and project policy. REAL is allowed only under explicit `live_trade` authorization, not by accident.
 
 ## Packaging And Concurrency Profile Contract
 
@@ -652,7 +652,9 @@ log_dir = .\logs
 terminal_path =
 magic_number =
 comment_prefix =
-mt5_comment_max_length = 16
+mt5_comment_max_length = 31
+comment_format = {comment_prefix}_{timeframe}_{intent8}
+comment_suffix_fields = timeframe,intent_id_8
 strategy_tag =
 environment_id = demo
 ```
@@ -714,19 +716,59 @@ terminal_path =
 environment_id = demo
 ```
 
-For this profile, direct EXE startup should show a clear `DEMO_ORDER_ENABLED` state when the account and config allow it. Any optional BAT wrapper must preserve the same behavior as launching the EXE directly. REAL accounts are still hard rejected unless the project policy explicitly permits a separate live-release path; this skill must not create that path by default.
+For the demo profile, direct EXE startup should show a clear `DEMO_ORDER_ENABLED` state when the account and config allow it. Any optional BAT wrapper must preserve the same behavior as launching the EXE directly. REAL accounts are allowed only through an explicit user-authorized live profile, not by default.
 
 Order methods must require:
 
 - connected account;
-- non-REAL account, with REAL hard rejected;
+- DEMO/CONTEST account for `demo_trade`, or REAL account only for user-authorized `live_trade`;
 - `trade_allowed=True`;
-- effective CLI mode `demo_trade`;
-- `allow_demo_trade=true`;
+- effective CLI/config mode `demo_trade` or `live_trade`;
+- `allow_demo_trade=true` for demo, or `allow_live_trade=true` plus `live_trade_ack=I_ACCEPT_REAL_MONEY_RISK` for live;
 - `dry_run_enforce` not blocking;
 - `kill_switch=false`;
 - max-position and max-volume gates for opens;
 - candidate-level `order_enabled=true`.
+
+## User-Authorized LIVE Profile
+
+A live-capable package is allowed when the user explicitly says to use a REAL/实盘 account. Do not
+hide this behind defaults. The config must make the choice obvious:
+
+```ini
+[runtime]
+mode = live_trade
+order_enabled = true
+allow_demo_trade = false
+allow_live_trade = true
+live_trade_ack = I_ACCEPT_REAL_MONEY_RISK
+kill_switch = false
+dry_run_enforce = false
+expected_account_server =
+expected_login =
+magic_number =
+comment_prefix =
+
+[risk]
+risk_cash_per_order =
+max_volume_per_order =
+max_total_volume =
+max_positions_total =
+max_positions_per_symbol =
+max_new_orders_per_cycle = 1
+position_sizing_mode = cost_inclusive_risk_cash
+
+[reconciliation]
+reconcile_on_startup = true
+reconcile_each_cycle = true
+unknown_freeze_new_orders = true
+```
+
+The runtime must print the account server, login, and `trade_mode_label=REAL` before order routing.
+If expected account fields are configured and do not match, block. If `live_trade_ack` is missing,
+block. If startup reconciliation has unknown unresolved state and `unknown_freeze_new_orders=true`,
+block new opens. Stage paperwork is evidence quality; it is not a substitute for these concrete
+runtime gates and it must not mechanically override the user's explicit capital decision.
 
 ## Runtime Output and Disk Control
 
@@ -755,9 +797,21 @@ Do not make demo order execution depend on re-reading a freshly rewritten `realt
 
 Do not repeatedly download the entire 3000-bar window and write/delete per-cycle OHLC/ZigZag files in continuous monitor mode. Use bounded cache files unless the user explicitly requests stateless scans for diagnostics.
 
+
 `magic_number` and `comment_prefix` must be external config values and must be unique for each strategy/version/environment. Do not reuse the same magic/comment namespace across different runtimes, or position reconciliation can manage the wrong trades.
 
-Broker-side MT5 comments may be truncated more aggressively than MT5's nominal limit; keep `mt5_comment_max_length` external, default conservatively, and validate identity by allowing the broker comment to be a prefix of the intended comment. Preserve a short intent id in the comment.
+Signal-driven open-order comments must include the strategy namespace, the current signal timeframe, and a short unique intent suffix. Use a deterministic format such as:
+
+```text
+{comment_prefix}_{timeframe}_{intent8}
+trendline_strategy_M15_a1b2c3d4
+trendline_strategy_M30_9f7e2a1b
+```
+
+Do not use an opaque suffix such as `abcdefgh` without the timeframe. When the user specifies a namespace such as `trendline_strategy`, preserve that namespace and append the current period before the short intent id. Keep the full `intent_id` in the local journal and only put the short suffix in MT5 `comment`. Keep `mt5_comment_max_length` external; use 31 when preserving `trendline_strategy_<period>_<intent8>` needs the full namespace.
+
+
+Broker-side MT5 comments may be truncated more aggressively than MT5's nominal limit; keep `mt5_comment_max_length` external, default conservatively, and validate identity by allowing the broker comment to be a prefix of the intended comment. Preserve both timeframe and a short intent id in the comment.
 
 When broker retcodes are unreliable, send once and reconcile against account state: new position observed for open, SL/TP observed for modify, position gone for close.
 
@@ -768,7 +822,7 @@ Treat order submission as an intent plus broker-state reconciliation, not as a s
 Every runtime that can send demo orders should include:
 
 - an order intent journal written before `order_send`, with intent id, symbol, side, volume, SL, TP, magic, comment, created time, close scope, requested volume, previous volume, and status;
-- an intent id generated with `uuid4()` or millisecond timestamp plus random suffix; MT5 comments should embed only a short id because broker comments can be length-limited;
+- an intent id generated with `uuid4()` or millisecond timestamp plus random suffix; MT5 comments should embed the current timeframe plus only a short id because broker comments can be length-limited;
 - atomic intent persistence: SQLite transaction, or write temp file + flush/fsync + `os.replace()`; direct partial-prone open/write is not enough for recovery state;
 - append-only intent updates should merge by `intent_id` and preserve original non-empty fields such as comment, theoretical entry, SL, TP, risk, and signal key; later status rows must not erase the original order intent context;
 - post-send reconciliation using `positions_get`, `orders_get`, `history_orders_get`, and/or `history_deals_get`, with MT5 broker/account state treated as authoritative and the local intent journal treated only as context;
@@ -788,7 +842,7 @@ Every runtime that can send demo orders should include:
 On monitor startup, do this before scanning for new signals:
 
 1. Connect or reconnect to MT5; if initialize/terminal_info fails, enter safe mode and do not send orders.
-2. Reject REAL accounts.
+2. Reject REAL accounts unless `mode=live_trade`, `allow_live_trade=true`, `live_trade_ack=I_ACCEPT_REAL_MONEY_RISK`, and the user explicitly authorized live use.
 3. Load local intent journal if present; ignore or quarantine corrupt partial records.
 4. Query `positions_get()` and filter by magic number.
 5. Query `orders_get()` and filter pending orders by magic number.
@@ -859,7 +913,7 @@ Run verification in this order:
 5. Immediate log check: after the EXE smoke, inspect `logs\` with `scripts/check_runtime_logs_for_errors.py <operator_or_logs_dir>` or an equivalent scanner. Any fatal/error/traceback/exception finding blocks delivery.
 6. Portability smoke: when runtime execution is requested/required, copy the portable folder to a different temporary path and launch the EXE there. Outputs must be written under the copied folder, not the original repo/runtime/build directory.
 7. Runtime monitor smoke: when runtime execution is requested/required, run at least one full monitor cycle. Confirm dynamic console updates, account/magic snapshot, `monitor_cycle pass` or equivalent, reconciliation counts, scan counts, cache update status, and no unexpected `order_send` when config disables orders.
-8. Order smoke: only after the user explicitly authorizes DEMO testing, run a demo-only open/modify/close or `close_all_magic`, then restore the safe default config. Verify retcode plus broker-state observation, lifecycle rows, history export, and final magic-number positions/orders check.
+8. Order smoke: only after the user explicitly authorizes DEMO or LIVE testing. For DEMO, run open/modify/close or `close_all_magic`, then restore the safe default config. For LIVE, do not force a trade unless the user explicitly requests a real test order; otherwise verify live account identity, gates, reconciliation, and wait for natural signals. Verify retcode plus broker-state observation, lifecycle rows, history export, and final magic-number positions/orders check.
 9. Risk/config audit: verify cost-inclusive sizing, commission-free symbol overrides, spread/slippage risk components, pending-order price formulas, raw-vs-adjusted order journal fields, and same-signal-bar duplicate blocking.
 10. Final hygiene: save smoke/log-check evidence outside the operator folder, then clean delivery `logs\` and optional `data_cache\` back to empty. The operator folder should contain one `.exe`, `config.ini`, empty `logs\`, and optional empty `data_cache\` only if needed. No BAT/CMD/PowerShell wrappers, source files, PyInstaller specs, build folders, historical logs, historical caches, local test configs, or loose helper scripts may be present. Text files and EXE strings should not contain machine-specific paths such as `D:\MT5`, `C:\Users\<name>`, `%APPDATA%\MetaQuotes\Terminal`, or terminal hash IDs.
 

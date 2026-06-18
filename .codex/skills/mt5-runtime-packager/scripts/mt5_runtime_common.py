@@ -2,8 +2,8 @@
 """Reusable MT5 runtime helpers for portable Python/EXE monitors.
 
 Copy this module into a runtime package when useful. Do not import it from the
-global skill directory inside a packaged EXE. Order helpers are DEMO-gated by
-default and hard-reject REAL accounts.
+global skill directory inside a packaged EXE. Order helpers are safe-gated by
+default: REAL accounts are rejected unless explicit live_trade config gates are present.
 """
 from __future__ import annotations
 
@@ -754,6 +754,7 @@ def mt5_account_state_blockers(
     require_trade_allowed: bool = True,
     require_zero_magic_positions: bool = False,
     require_zero_magic_orders: bool = False,
+    allow_real_account: bool = False,
 ) -> list[str]:
     """Return blockers for order-enabled runtime startup.
 
@@ -775,8 +776,8 @@ def mt5_account_state_blockers(
         blockers.append(
             f"account_login mismatch: expected {expected_login}, got {snapshot.get('account_login')}"
         )
-    if snapshot.get("trade_mode_label") == "REAL":
-        blockers.append("REAL account is rejected")
+    if snapshot.get("trade_mode_label") == "REAL" and not allow_real_account:
+        blockers.append("REAL account is rejected unless explicit live_trade authorization is enabled")
     if require_trade_allowed and not bool(snapshot.get("trade_allowed", False)):
         blockers.append("trade_allowed is false")
     if require_zero_magic_positions and int(snapshot.get("magic_positions_count", 0)) != 0:
@@ -796,13 +797,19 @@ def write_mt5_account_state_snapshot(
     append_jsonl(log_dir / filename, {"event": "mt5_account_state_snapshot", **snapshot})
 
 
-def mt5_comment_id(comment_prefix: str, intent_id: str, max_comment: int = 16) -> str:
+def mt5_comment_id(comment_prefix: str, intent_id: str, max_comment: int = 31, timeframe: str = "") -> str:
     comment_id = intent_id[:8]
     prefix = comment_prefix.strip() or "MT5"
-    comment = f"{prefix}-{comment_id}"
+    tf = str(timeframe or "").strip().upper()
+    comment = f"{prefix}_{tf}_{comment_id}" if tf else f"{prefix}_{comment_id}"
     if len(comment) > max_comment:
-        prefix_room = max(0, max_comment - len(comment_id) - 1)
-        comment = f"{prefix[:prefix_room]}-{comment_id}" if prefix_room else comment_id[:max_comment]
+        short_id = comment_id[:4]
+        if tf:
+            prefix_room = max(0, max_comment - len(tf) - len(short_id) - 2)
+            comment = f"{prefix[:prefix_room]}_{tf}_{short_id}" if prefix_room else f"{tf}_{short_id}"
+        else:
+            prefix_room = max(0, max_comment - len(short_id) - 1)
+            comment = f"{prefix[:prefix_room]}_{short_id}" if prefix_room else short_id[:max_comment]
     return comment[:max_comment]
 
 
@@ -820,11 +827,14 @@ class DemoTradeGates:
     magic: int
     comment_prefix: str
     allow_demo_trade: bool = False
+    allow_live_trade: bool = False
+    live_trade_ack: str = ""
+    mode: str = "demo_trade"
     dry_run_enforce: bool = True
     order_enabled: bool = False
     kill_switch: bool = False
     max_positions: int = 1
-    max_comment: int = 16
+    max_comment: int = 31
     deviation_points: int = 20
     filling_mode: str = "IOC"
     order_confirm_timeout_seconds: float = 3.0
@@ -832,15 +842,27 @@ class DemoTradeGates:
 
 
 def demo_trade_gate_reasons(mt5: Any, gates: DemoTradeGates) -> list[str]:
+    """Return order gate blockers for demo or explicitly-authorized live trading."""
     reasons: list[str] = []
     account = mt5.account_info()
     terminal = mt5.terminal_info()
+    mode = str(getattr(gates, "mode", "demo_trade") or "demo_trade").lower()
+    live_requested = mode == "live_trade" or bool(getattr(gates, "allow_live_trade", False))
+    live_ack_ok = str(getattr(gates, "live_trade_ack", "")) == "I_ACCEPT_REAL_MONEY_RISK"
     if gates.kill_switch:
         reasons.append("kill_switch=true")
     if gates.dry_run_enforce:
         reasons.append("dry_run_enforce=true")
-    if not gates.allow_demo_trade:
-        reasons.append("allow_demo_trade=false")
+    if live_requested:
+        if mode != "live_trade":
+            reasons.append("allow_live_trade=true requires mode=live_trade")
+        if not gates.allow_live_trade:
+            reasons.append("allow_live_trade=false")
+        if not live_ack_ok:
+            reasons.append("live_trade_ack must equal I_ACCEPT_REAL_MONEY_RISK")
+    else:
+        if not gates.allow_demo_trade:
+            reasons.append("allow_demo_trade=false")
     if not gates.order_enabled:
         reasons.append("order_enabled=false")
     if int(gates.magic) <= 0:
@@ -854,8 +876,12 @@ def demo_trade_gate_reasons(mt5: Any, gates: DemoTradeGates) -> list[str]:
         reasons.append("MT5 terminal_info unavailable")
     trade_mode = int(getattr(account, "trade_mode", -1))
     if trade_mode == TRADE_MODE_REAL:
-        reasons.append("REAL account is rejected")
-    elif trade_mode not in (TRADE_MODE_DEMO, TRADE_MODE_CONTEST):
+        if not (live_requested and live_ack_ok and gates.allow_live_trade and mode == "live_trade"):
+            reasons.append("REAL account requires explicit live_trade authorization")
+    elif trade_mode in (TRADE_MODE_DEMO, TRADE_MODE_CONTEST):
+        if live_requested:
+            reasons.append("live_trade mode requires a REAL account; use demo_trade for DEMO/CONTEST")
+    else:
         reasons.append(f"unknown trade_mode={trade_mode}")
     if not bool(getattr(account, "trade_allowed", False)):
         reasons.append("account trade_allowed is false")
@@ -948,6 +974,7 @@ def send_market_order_once(
     signal_key: str,
     intent_journal: Path | None = None,
     block_if_symbol_position_exists: bool = True,
+    timeframe: str = "",
 ) -> dict[str, Any]:
     """Send one DEMO market order after gates, journal, and duplicate-state checks."""
     reasons = demo_trade_gate_reasons(mt5, gates)
@@ -971,7 +998,7 @@ def send_market_order_once(
     order_type = mt5.ORDER_TYPE_BUY if side == "BUY" else mt5.ORDER_TYPE_SELL
     entry_price = float(tick.ask if side == "BUY" else tick.bid)
     intent_id = uuid.uuid4().hex
-    comment = mt5_comment_id(gates.comment_prefix, intent_id, max_comment=gates.max_comment)
+    comment = mt5_comment_id(gates.comment_prefix, intent_id, max_comment=gates.max_comment, timeframe=timeframe)
     request = {
         "action": mt5.TRADE_ACTION_DEAL,
         "symbol": symbol,

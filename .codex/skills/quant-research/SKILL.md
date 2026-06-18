@@ -1,6 +1,6 @@
 ---
 name: quant-research
-description: Three-phase research operating system for MT5 and FX quantitative strategy work. Use when Codex works on exploratory alpha hypothesis testing, OHLC/tick backtests, strict audit enforcement, future-function/lookahead repair, multi-timeframe timing audits, pivot/swing/structure integrity, version-folder isolation, new-version active-Python-file copying, new thread/context reset for version iteration, temporary-file cleanup, win-rate/RR testing, MFE/MAE attribution, bar-by-bar replay determinism, OOS/holdout governance, forward-live boundaries, or preparing a frozen candidate for MT5 dry-run/demo runtime packaging.
+description: Three-phase research operating system for MT5 and FX quantitative strategy work. Use when Codex works on exploratory alpha hypothesis testing, OHLC/tick backtests, strict audit enforcement, future-function/lookahead repair, multi-timeframe timing audits, pivot/swing/structure integrity, version-folder isolation, new-version active-Python-file copying, new thread/context reset for version iteration, temporary-file cleanup, win-rate/RR testing, MFE/MAE attribution, bar-by-bar replay determinism, OOS/holdout governance, forward-live boundaries, or preparing a frozen candidate for MT5 dry-run/demo/live runtime packaging.
 ---
 
 # Quant Research
@@ -11,7 +11,7 @@ Use this skill to move trading ideas through a phase-aware research pipeline:
 
 1. **Phase 1 - Quick exploration**: turn hypotheses into code, fatal-audit the obvious traps, run quick tests, RR tests, and multi-dimensional attribution. Results are exploratory only.
 2. **Phase 2 - Candidate iteration**: register promising ideas, isolate each version folder, audit execution/MTF timing, compare versions, perform attribution-driven changes, and require bar-by-bar replay before freeze.
-3. **Phase 3 - EXE/demo runtime handoff**: hand a frozen candidate to MT5 runtime packaging with dry-run/demo safety gates. REAL trading is out of scope.
+3. **Phase 3 - EXE demo/live runtime handoff**: hand a frozen candidate to MT5 runtime packaging with dry-run/demo safety gates and, when the user explicitly authorizes it, a controlled `live_trade` real-money path.
 
 Keep the system research-first: Phase 1 should stay fast and lightly gated; Phase 2 should
 be version-isolated and auditable; Phase 3 should be strict. Do not turn registry or ledger
@@ -22,7 +22,7 @@ repair, replay-difference investigation, candidate approval, MTF/pivot/execution
 runtime safety review. In that mode, do audit-only minimal patches and do not optimize
 performance or change strategy intent.
 
-This skill may help propose, quantify, implement, test, reject, and iterate exploratory strategy hypotheses. It must not present unverified exploration as alpha, OOS, forward-live, or live-ready evidence.
+This skill may help propose, quantify, implement, test, reject, and iterate exploratory strategy hypotheses. It must not present unverified exploration as alpha, OOS, forward-live, or live-ready evidence. Live trading is a user capital decision; Codex should enforce technical safeguards, not impose a blanket ban once the user explicitly authorizes live use.
 
 ## Authority Boundary
 
@@ -36,7 +36,7 @@ First read the nearest project `AGENTS.md`. If available, also read the strategy
 - If a multi-timeframe strategy lacks MTF timing evidence, formal metrics are blocked as `mtf_timing_unverified`.
 - If an audit task has not satisfied Strict Audit Enforcement Mode, promotion/approval is blocked as `strict_audit_unverified`.
 - Do not touch frozen or forward-live strategy code in place.
-- Do not place REAL orders, enable REAL-account trading, or treat demo/runtime logs as OOS-Final evidence.
+- Do not place REAL orders or enable REAL-account trading unless the user explicitly authorizes this specific runtime and the package satisfies `LIVE_TRADING_AUTHORIZATION_STANDARD.md`; never treat demo/runtime logs as OOS-Final evidence.
 - Clean temporary and invalid outputs promptly, but never delete raw data, manifests, audits,
   frozen/forward logs, runtime order/reconciliation evidence, or user-supplied source files
   without explicit approval and an archival note.
@@ -49,7 +49,7 @@ Before acting, classify the task:
 |------|----------|----------|----------------|
 | Phase 1 exploration | new hypothesis, quick code, quick backtest, RR test, MFE/MAE, loss attribution | optional | `exploratory_not_decision_grade` |
 | Phase 2 candidate iteration | promising idea, isolated version root, formal audit, MTF timing audit, logic change, parameter/RR platform, bar-by-bar replay | required | `candidate_not_final` until freeze/holdout |
-| Phase 3 runtime packaging | frozen candidate, EXE, dry-run/demo scan/order simulation, runtime safety | required | `runtime_validation_not_oos_final` |
+| Phase 3 runtime packaging | frozen candidate, EXE, dry-run/demo/live scan/order execution, runtime safety | required | `runtime_validation_not_oos_final` or `live_trial_active` when user-authorized REAL trading starts |
 
 If the phase is unclear, choose the lowest-risk phase and state the assumption.
 
@@ -141,16 +141,16 @@ Bar-by-bar replay is mandatory before Phase 3. It must compare batch vs replay M
 
 ## Phase 3 Workflow
 
-Goal: package and verify a frozen candidate as a safe dry-run/demo runtime.
+Goal: package and verify a frozen candidate as a safe dry-run/demo runtime, or as a user-authorized `live_trade` runtime when the user explicitly accepts real-money risk.
 
 1. Require frozen candidate identity: strategy id, version, version root, commit, config hash, MTF timing audit if applicable, version isolation check, and bar-by-bar replay report.
 2. Create runtime handoff using `templates/runtime_handoff_template.md`.
-3. Use the `mt5-runtime-packager` skill for EXE packaging, MT5 path portability, dry-run/demo safety gates, order-intent journaling, signal execution ledger, startup reconciliation and portable deliverables.
-4. Default to dry-run. Demo order execution requires explicit user authorization and must remain DEMO-only with REAL hard rejection.
+3. Use the `mt5-runtime-packager` skill for EXE packaging, MT5 path portability, dry-run/demo/live safety gates, order-intent journaling, signal execution ledger, startup reconciliation and portable deliverables.
+4. Default to dry-run. Demo order execution requires explicit user authorization. REAL order execution is allowed only when the user explicitly requests live/实盘 and `config.ini` has `mode=live_trade`, `allow_live_trade=true`, and `live_trade_ack=I_ACCEPT_REAL_MONEY_RISK`.
 5. Record EXE hash, config hash, build command, runtime audit, safety state and smoke-test result.
-6. Decide only: `runtime_blocked`, `dry_run_ready`, `demo_ready`, or `portable_package_ready`.
+6. Decide only: `runtime_blocked`, `dry_run_ready`, `demo_ready`, `user_authorized_live_ready`, `live_trial_active`, or `portable_package_ready`.
 
-Phase 3 validates runtime behavior, not strategy profitability. Demo/runtime logs are not OOS-Final.
+Phase 3 validates runtime behavior, not strategy profitability. Demo/runtime logs are not OOS-Final. User-authorized live logs are real-money operational evidence from activation time onward, not backtest/OOS-Final proof.
 
 ## Governance Gates
 
@@ -162,7 +162,7 @@ Apply gates by phase:
   root, copied active `.py`, context reset/handoff, execution audit, MTF timing audit when
   applicable, attribution, cleanup log, data split discipline and bar-by-bar replay.
 - Phase 3: strict gates: frozen candidate handoff, strict audit clean status, runtime safety
-  gates, REAL rejection, portable package audit and clean deliverable folder.
+  gates, explicit live authorization when applicable, portable package audit and clean deliverable folder.
 
 If a guard blocks formal research, do not stop all work automatically. Either downgrade to Phase 1 exploration with explicit labels or ask for the missing formal artifact when the user wants decision-grade output.
 
@@ -261,7 +261,7 @@ Phase 3:
 - frozen candidate identity;
 - runtime handoff status;
 - dry-run/demo safety status;
-- REAL rejection status;
+- live authorization / account gate status;
 - EXE/config hash status;
 - runtime decision.
 

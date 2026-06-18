@@ -2,7 +2,7 @@
 
 ## 核心原则
 
-本文档是 Codex、Claude Code 以及所有跨目录研究流程的最高优先级约束。任何策略任务必须遵循以下十三大禁区，违反任何一条意味着该研究结果无效。涉及数据切分与 OOS 声明时必须遵循 `DATA_SPLIT_AND_OOS_POLICY.md`；涉及成交、止损、止盈、移动止损、头寸规模或实盘保护时，还必须遵循 `EXIT_RISK_AND_LOGIC_REFINEMENT_STANDARD.md`；涉及费用、点差、滑点、手续费或成本模型时，还必须遵循 `BROKER_COST_MODEL_STANDARD.md`；涉及多周期特征、逐根回测、版本目录、输出文件或跨版本对比时，还必须遵循 `MTF_LOOKAHEAD_AND_VERSION_ISOLATION_STANDARD.md`；涉及审计、修复未来函数、加固、批准、重放一致性或安全补丁时，还必须进入 `STRICT_AUDIT_ENFORCEMENT_STANDARD.md` 定义的 Strict Audit Enforcement Mode；涉及 MT5 runtime、EXE 打包、dry-run/demo 模拟下单、订单监控、持仓管理或换电脑运行时，还必须遵循 `MT5_RUNTIME_PACKAGING_STANDARD.md`。
+本文档是 Codex、Claude Code 以及所有跨目录研究流程的最高优先级约束。任何策略任务必须遵循以下十三大禁区，违反任何一条意味着该研究结果无效。涉及数据切分与 OOS 声明时必须遵循 `DATA_SPLIT_AND_OOS_POLICY.md`；涉及成交、止损、止盈、移动止损、头寸规模或实盘保护时，还必须遵循 `EXIT_RISK_AND_LOGIC_REFINEMENT_STANDARD.md`；涉及费用、点差、滑点、手续费或成本模型时，还必须遵循 `BROKER_COST_MODEL_STANDARD.md`；涉及多周期特征、逐根回测、版本目录、输出文件或跨版本对比时，还必须遵循 `MTF_LOOKAHEAD_AND_VERSION_ISOLATION_STANDARD.md`；涉及审计、修复未来函数、加固、批准、重放一致性或安全补丁时，还必须进入 `STRICT_AUDIT_ENFORCEMENT_STANDARD.md` 定义的 Strict Audit Enforcement Mode；涉及 MT5 runtime、EXE 打包、dry-run/demo/live 实盘下单、订单监控、持仓管理或换电脑运行时，还必须遵循 `MT5_RUNTIME_PACKAGING_STANDARD.md` 和 `LIVE_TRADING_AUTHORIZATION_STANDARD.md`。
 
 ## 三阶段研发主流程
 
@@ -10,9 +10,9 @@
 
 1. **Phase 1 快速开发测试**：用于提出假设、量化规则、快速写代码、致命审计、快速测试、盈亏比测试和多维归因。该阶段可以没有完整 registry，但必须标记为 `exploratory / not decision-grade / not OOS / not forward-live`。
 2. **Phase 2 成型后版本迭代**：用于把有潜力的探索结果注册成候选策略，执行完整审计、版本化迭代、归因优化、参数/盈亏比平台检查，并在冻结前通过逐根回测。
-3. **Phase 3 EXE 模拟下单**：用于冻结候选后的 dry-run/demo runtime 打包、模拟下单、安全门、日志、订单意图和持仓恢复验证。打包必须符合 `MT5_RUNTIME_PACKAGING_STANDARD.md`，包括源码预检、直接 EXE 启动、外置配置、日志/对账、3000K 缓存、便携目录和 audit hook。REAL 账户下单不属于本制度允许范围。
+3. **Phase 3 EXE 模拟/实盘运行**：用于冻结候选后的 dry-run/demo/live runtime 打包、模拟下单、用户授权实盘、安全门、日志、订单意图和持仓恢复验证。打包必须符合 `MT5_RUNTIME_PACKAGING_STANDARD.md`，包括源码预检、直接 EXE 启动、外置配置、日志/对账、3000 根缓存、便携目录和 audit hook。REAL 账户不再被制度默认禁止；只要模拟/运行烟测通过，并且用户明确授权、`mode=live_trade`、`allow_live_trade=true`、`live_trade_ack=I_ACCEPT_REAL_MONEY_RISK`，即可进入受控实盘试运行。
 
-原 Stage 0-13 流程仍然有效，但它主要约束 Phase 2 和 Phase 3 的正式验证、冻结、前向和部署准备。Phase 1 的结果只能用于研发判断，不能作为正式策略结论。
+原 Stage 0-13 流程仍然有效，但它主要约束 Phase 2 和 Phase 3 的正式验证、冻结、前向和部署准备。Phase 1 的结果只能用于研发判断，不能作为正式策略结论。实盘权限以用户明确授权和运行安全为最高优先级，Stage 13/registry/Git 记录是证据质量与回溯工具，不得成为阻止用户使用自有资金的机械门槛。
 
 ## 研究效率与分级门禁原则
 
@@ -130,7 +130,7 @@ Phase 2+ 必须执行"一个版本，一个文件夹"。每个版本必须有独
 
 在执行任何策略相关代码修改、参数调整、数据分析时，必须先回答以下十一个问题：
 
-1. **当前任务属于哪个研发阶段？** 先判断 Phase 1 快速开发测试、Phase 2 成型后版本迭代、还是 Phase 3 EXE 模拟下单；如果属于正式验证，再对标 RESEARCH_WORKFLOW.md 中的 Stage 0-13。
+1. **当前任务属于哪个研发阶段？** 先判断 Phase 1 快速开发测试、Phase 2 成型后版本迭代、还是 Phase 3 EXE 模拟/实盘运行；如果属于正式验证，再对标 RESEARCH_WORKFLOW.md 中的 Stage 0-13。
 
 2. **是否允许修改代码？** 如果策略已进入 forward-live（Stage 12+），信号引擎代码不允许修改。如果仍在开发阶段（Stage 1-8），逻辑修改必须基于 Trade Attribution 的发现。否则回答"否"。
 

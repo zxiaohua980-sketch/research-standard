@@ -239,14 +239,64 @@ def portable_config_path_problems(config_text: str) -> list[str]:
     return problems
 
 
+def find_runtime_executor(root: Path) -> Path:
+    """Find the package's Python runtime entrypoint.
+
+    Older packages often used ``mt5_executor.py``. Newer single-file runtimes may name the
+    direct entrypoint after the strategy/runtime instead. Treat those names as first-class so
+    the audit does not emit a false FAIL before it can inspect the actual order-safety code.
+    """
+    preferred = [root / "mt5_executor.py"]
+    preferred.extend(sorted(root.glob("*runtime*.py")))
+    preferred.extend(sorted(root.glob("*executor*.py")))
+    preferred.extend(sorted(root.glob("*.py")))
+    seen: set[Path] = set()
+    candidates: list[Path] = []
+    for path in preferred:
+        resolved = path.resolve()
+        if resolved in seen or not path.is_file():
+            continue
+        seen.add(resolved)
+        candidates.append(path)
+    if not candidates:
+        return root / "mt5_executor.py"
+
+    def score(path: Path) -> tuple[int, str]:
+        text = read(path)
+        markers = [
+            "def main",
+            "argparse",
+            "local_runtime_audit",
+            "initialize_mt5",
+            "mt5.initialize",
+            "order_send",
+            "positions_get",
+        ]
+        return (sum(1 for marker in markers if marker in text), path.name)
+
+    return sorted(candidates, key=score, reverse=True)[0]
+
+
+def find_build_script(root: Path) -> Path:
+    """Find the maintained build script without requiring the legacy build_exe.bat name."""
+    for name in ["build_exe.bat", "build_portable.bat", "build.bat"]:
+        path = root / name
+        if path.is_file():
+            return path
+    build_candidates = sorted(root.glob("build*.bat"))
+    if build_candidates:
+        return build_candidates[0]
+    return root / "build_exe.bat"
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Audit MT5 runtime package portability/safety.")
     parser.add_argument("runtime_dir", help="Runtime source directory, e.g. D:\\MT5\\MA\\v1.1_runtime")
     args = parser.parse_args()
 
     root = Path(args.runtime_dir).resolve()
-    executor = root / "mt5_executor.py"
-    build_bat = root / "build_exe.bat"
+    executor = find_runtime_executor(root)
+    build_bat = find_build_script(root)
     config = root / "config.ini"
     dist = root / "dist"
 
@@ -293,7 +343,22 @@ def main() -> int:
     )
 
     allow_live_false = re.search(r"^\s*allow_live_trade\s*=\s*false\s*$", config_text, re.I | re.M) is not None
-    result(rows, "PASS" if allow_live_false else "FAIL", "config_default_allow_live_trade_false", str(config))
+    allow_live_true = re.search(r"^\s*allow_live_trade\s*=\s*true\s*$", config_text, re.I | re.M) is not None
+    live_mode = (config_value(config_text, "mode") or "").lower() == "live_trade"
+    live_ack = (config_value(config_text, "live_trade_ack") or "").strip()
+    live_profile_ok = live_mode and allow_live_true and live_ack == "I_ACCEPT_REAL_MONEY_RISK"
+    result(
+        rows,
+        "PASS" if (allow_live_false or live_profile_ok) else "FAIL",
+        "config_live_trade_authorization_gate",
+        (
+            "allow_live_trade=false default safe gate"
+            if allow_live_false
+            else "explicit live_trade authorization present"
+            if live_profile_ok
+            else "allow_live_trade=true requires mode=live_trade and live_trade_ack=I_ACCEPT_REAL_MONEY_RISK"
+        ),
+    )
 
     default_mode = (config_value(config_text, "mode") or "dry_run").lower()
     demo_default = default_mode == "demo_trade"
@@ -418,19 +483,22 @@ def main() -> int:
         ),
     )
 
-    real_reject_markers = ["LIVE ACCOUNT", "TRADE_MODE_REAL", "trade_mode == 2", "trade_mode==2"]
-    demo_only_markers = ["TRADE_MODE_DEMO", "trade_mode == 0", "trade_mode==0", "0=DEMO"]
+    real_markers = ["TRADE_MODE_REAL", "trade_mode == 2", "trade_mode==2", "trade_mode_label"]
+    live_gate_markers = ["allow_live_trade", "live_trade_ack", "live_trade", "I_ACCEPT_REAL_MONEY_RISK"]
+    demo_only_markers = ["TRADE_MODE_DEMO", "trade_mode == 0", "trade_mode==0", "0=DEMO", "REAL account is rejected"]
+    real_gate_ok = contains_any(executor_text, demo_only_markers) or (
+        contains_any(executor_text, real_markers) and contains_any(executor_text, live_gate_markers)
+    )
     result(
         rows,
-        "PASS" if contains_any(executor_text, real_reject_markers + demo_only_markers) else "FAIL",
-        "real_account_rejected",
-        "executor should hard reject REAL accounts or positively require DEMO/CONTEST mode",
+        "PASS" if real_gate_ok else "FAIL",
+        "real_account_authorization_gate",
+        "executor should either hard reject REAL accounts or require explicit live_trade authorization gates",
     )
     can_send_orders = "order_send" in executor_text
     lower_executor = executor_text.lower()
     build_opens_mt5 = (
         "mt5.initialize" in build_text
-        or "MetaTrader5" in build_text
         or "terminal64.exe" in build_text.lower()
         or "terminal.exe" in build_text.lower()
     )
@@ -460,6 +528,26 @@ def main() -> int:
             if not hardcoded_comment_requests
             else f"found {len(hardcoded_comment_requests)} hardcoded order comment(s)"
         ),
+    )
+    timeframe_comment_markers = [
+        "comment_format",
+        "comment_suffix_fields",
+        "timeframe",
+        "{timeframe}",
+        "_M15_",
+        "_M30_",
+    ]
+    result(
+        rows,
+        "PASS" if (
+            not can_send_orders
+            or (
+                "comment" in lower_executor
+                and contains_any(executor_text + config_text, timeframe_comment_markers)
+            )
+        ) else "WARN",
+        "timeframe_qualified_order_comment",
+        "signal-driven MT5 open comments should include strategy namespace + current timeframe + short intent suffix",
     )
     identity_keys = ["strategy_id", "runtime_id", "environment_id"]
     result(
@@ -580,6 +668,14 @@ def main() -> int:
         "spread_risk_accounting",
     ]
     missing_market_entry = [key for key in market_entry_keys if not config_has_key(config_text, key)]
+    entry_execution_mode = (config_value(config_text, "entry_execution_mode") or "").strip().lower()
+    is_market_or_open_entry = entry_execution_mode in {
+        "market",
+        "open",
+        "market_open",
+        "open_price",
+        "next_open",
+    }
     market_entry_markers = [
         "broker_tick_side_no_manual_spread",
         "market_entry_price_from_tick",
@@ -602,6 +698,7 @@ def main() -> int:
         rows,
         "PASS" if (
             not can_send_orders
+            or not is_market_or_open_entry
             or (
                 not missing_market_entry
                 and contains_any(executor_text + config_text, market_entry_markers)
@@ -610,7 +707,9 @@ def main() -> int:
         ) else "FAIL",
         "market_open_entry_no_manual_spread_adjustment",
         (
-            "market/open entries use broker tick side and do not manually add spread to entry"
+            "entry_execution_mode is not market/open; pending-order spread policy is audited separately"
+            if not is_market_or_open_entry
+            else "market/open entries use broker tick side and do not manually add spread to entry"
             if not missing_market_entry and not manual_market_spread_entry
             else (
                 "manual raw_open/raw_entry/open_price +/- spread pattern found"
@@ -906,7 +1005,7 @@ def main() -> int:
         rows,
         "PASS" if (not can_send_orders or (has_intent_journal and contains_any(executor_text, intent_id_markers))) else "WARN",
         "unique_intent_id_generation",
-        "intent_id should be collision-resistant; MT5 comment should carry only a short comment_id",
+        "intent_id should be collision-resistant; MT5 comment should carry timeframe plus only a short comment_id",
     )
     comment_limit_markers = ["comment_id", "truncate", "max_comment", "comment_limit"]
     result(
@@ -916,7 +1015,7 @@ def main() -> int:
             or ("comment" in lower_executor and contains_any(executor_text, comment_limit_markers))
         ) else "WARN",
         "mt5_comment_length_control",
-        "comments should account for broker truncation limits while preserving a short intent id",
+        "comments should account for broker truncation limits while preserving timeframe and a short intent id",
     )
     history_window_markers = [
         "recovery_lookback_days",

@@ -2,7 +2,7 @@
 
 ## 核心原则
 
-本文档是 Claude Code、Codex 以及所有跨目录研究流程的最高优先级约束。任何策略任务必须遵循以下十三大禁区，违反任何一条意味着该研究结果无效。涉及数据切分与 OOS 声明时必须遵循 `DATA_SPLIT_AND_OOS_POLICY.md`；涉及成交、止损、止盈、移动止损、头寸规模或实盘保护时，还必须遵循 `EXIT_RISK_AND_LOGIC_REFINEMENT_STANDARD.md`；涉及费用、点差、滑点、手续费或成本模型时，还必须遵循 `BROKER_COST_MODEL_STANDARD.md`；涉及多周期特征、逐根回测、版本目录、输出文件或跨版本对比时，还必须遵循 `MTF_LOOKAHEAD_AND_VERSION_ISOLATION_STANDARD.md`；涉及审计、修复未来函数、加固、批准、重放一致性或安全补丁时，还必须进入 `STRICT_AUDIT_ENFORCEMENT_STANDARD.md` 定义的 Strict Audit Enforcement Mode；涉及 MT5 runtime、EXE 打包、dry-run/demo 模拟下单、订单监控、持仓管理或换电脑运行时，还必须遵循 `MT5_RUNTIME_PACKAGING_STANDARD.md`。
+本文档是 Claude Code、Codex 以及所有跨目录研究流程的最高优先级约束。任何策略任务必须遵循以下十三大禁区，违反任何一条意味着该研究结果无效。涉及数据切分与 OOS 声明时必须遵循 `DATA_SPLIT_AND_OOS_POLICY.md`；涉及成交、止损、止盈、移动止损、头寸规模或实盘保护时，还必须遵循 `EXIT_RISK_AND_LOGIC_REFINEMENT_STANDARD.md`；涉及费用、点差、滑点、手续费或成本模型时，还必须遵循 `BROKER_COST_MODEL_STANDARD.md`；涉及多周期特征、逐根回测、版本目录、输出文件或跨版本对比时，还必须遵循 `MTF_LOOKAHEAD_AND_VERSION_ISOLATION_STANDARD.md`；涉及审计、修复未来函数、加固、批准、重放一致性或安全补丁时，还必须进入 `STRICT_AUDIT_ENFORCEMENT_STANDARD.md` 定义的 Strict Audit Enforcement Mode；涉及 MT5 runtime、EXE 打包、dry-run/demo/live 实盘下单、订单监控、持仓管理或换电脑运行时，还必须遵循 `MT5_RUNTIME_PACKAGING_STANDARD.md` 和 `LIVE_TRADING_AUTHORIZATION_STANDARD.md`。
 
 ## 研究效率、分级门禁与文件卫生
 
@@ -33,7 +33,7 @@ Phase 2+ 开启新版本时必须：
 
 ### 4. 禁止把历史回填当成 forward validation
 
-Forward validation 的严格定义：仅有 framework_start_time 之后新产生的信号和交易才算 forward-live。历史回填（historical backfill）、固定规则回测（fixed-rule backtest）、回溯时间序列验证（walk-forward）都属于历史分析，不可混淆。forward-live 必须通过 Gate A（3个月+30笔）或 Gate B（50笔）才能正式评价。
+Forward validation 的严格定义：仅有 framework_start_time 之后新产生的信号和交易才算 forward-live。历史回填（historical backfill）、固定规则回测（fixed-rule backtest）、回溯时间序列验证（walk-forward）都属于历史分析，不可混淆。Gate A（3个月+30笔）或 Gate B（50笔）用于评价证据质量，不再作为用户授权实盘的机械阻断条件；实盘授权按 `LIVE_TRADING_AUTHORIZATION_STANDARD.md` 执行。
 
 ### 5. 禁止在 forward-live 阶段修改 frozen strategy
 

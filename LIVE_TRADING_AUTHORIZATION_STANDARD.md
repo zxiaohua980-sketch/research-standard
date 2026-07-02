@@ -1,6 +1,6 @@
 # Live Trading Authorization Standard
 
-Updated: 2026-06-19
+Updated: 2026-06-20
 
 ## Purpose
 
@@ -11,30 +11,27 @@ The operating principle is now:
 模拟能稳定运行 + 用户明确承担资金风险 = 可以进入受控实盘试运行。
 ```
 
-The job of the research system is not to stop the trader from using his own capital. Its job is to
-prevent preventable technical mistakes: wrong account, wrong version, wrong magic number, duplicate
-orders, broken sizing, stale signals, missing logs, unreconciled positions, or accidental oversized
-risk.
+The research system should not block user capital on extra paperwork alone. It should only block
+avoidable technical mistakes: wrong account, wrong version, wrong magic number, duplicate orders,
+stale signals, missing logs, unreconciled positions, or accidental oversized risk.
 
 ## Authority
 
-For this machine/user, the user may explicitly authorize real-money trading. When that authorization
-exists, Codex must not block live deployment merely because the account is REAL.
+For this machine/user, if the user decides to use the same strategy/runtime in real-money mode,
+the technical gates are the **same as demo order path**.
 
-A runtime may trade REAL only when all of the following are true:
+A runtime may run REAL only when all of the following are true:
 
-1. The user explicitly requested live/实盘 use for this specific strategy/runtime.
-2. The exact EXE/config intended for live was already run successfully in dry-run or demo/order-smoke.
-3. `config.ini` uses `mode = live_trade` and `allow_live_trade = true`.
-4. `config.ini` contains `live_trade_ack = I_ACCEPT_REAL_MONEY_RISK`.
-5. The runtime prints the detected account server/login/trade mode before order routing.
-6. If configured, `expected_account_server` and `expected_login` match the detected MT5 account.
-7. `kill_switch = false`, MT5 `trade_allowed=True`, and terminal trading is enabled.
-8. Position sizing is cost-inclusive and obeys `risk_cash_per_order`, `max_volume_per_order`,
+1. The user explicitly requested real-money mode for this specific strategy/runtime.
+2. The exact EXE/config intended for live was already run successfully in dry-run or demo/order smoke.
+3. `mode` is set to `demo_trade` or `live_trade`, `order_enabled = true`, `dry_run_enforce = false`, and `kill_switch = false`.
+4. The runtime prints account/server/login and trade-mode before routing orders.
+5. If configured, `expected_account_server` and `expected_login` match the detected MT5 account.
+6. Startup reconciliation has checked current positions, pending orders, unresolved intents, and the signal
+   execution ledger before scanning new signals.
+7. Position sizing is cost-inclusive and obeys `risk_cash_per_order`, `max_volume_per_order`,
    `max_positions_total`, `max_positions_per_symbol`, and `max_new_orders_per_cycle`.
-9. Startup reconciliation has checked current positions, pending orders, recent history, unresolved
-   intents, and the signal execution ledger before scanning new signals.
-10. The runtime uses a unique `magic_number` and `comment_prefix` for this strategy/version/environment.
+8. The runtime uses a unique `magic_number` and `comment_prefix` for this strategy/version/environment.
 
 If any item fails, the runtime must enter safe mode or `runtime_blocked`.
 
@@ -42,9 +39,7 @@ If any item fails, the runtime must enter safe mode or `runtime_blocked`.
 
 Do not block live solely because:
 
-- the account is REAL;
-- Stage 13 paperwork is not complete;
-- a registry field still says `production_live=false` while the user has explicitly chosen a live trial;
+- a registry field still says `production_live=false`;
 - a Git tag is missing in a local-only folder, if a local hash identity is recorded;
 - forward-live Gate A/B has not accumulated enough trades.
 
@@ -56,10 +51,12 @@ not whether the user may risk his own capital.
 Use plain labels:
 
 - `dry_run_ready`: EXE scans/reconciles/logs without sending orders.
-- `demo_ready`: DEMO order path passed broker-state reconciliation.
-- `user_authorized_live_ready`: exact EXE/config passed static audit and runtime smoke and is configured for live by user choice.
+- `demo_ready`: order-capable runtime (DEMO or REAL) passed broker-state reconciliation.
 - `live_trial_active`: real-money runtime has started; results are real operational records, not backtest or OOS-Final proof.
 - `runtime_blocked`: technical or config safety check failed.
+
+`user_authorized_live_ready` is retained as historical alias only when a project wants a separate label;
+in this standard it is equivalent to `demo_ready`.
 
 ## Live Trial Rules
 
@@ -70,16 +67,16 @@ During `live_trial_active`:
 - Kill switch, manual close, or emergency disable is always allowed for safety, but must be logged as intervention.
 - Performance claims must separate backtest/demo/live-trial records. Do not backfill old trades into live evidence.
 
-## Minimum Live Config Fields
+## Minimum Order-Capable Config Fields
 
 ```ini
 [runtime]
 mode = live_trade
-allow_live_trade = true
-allow_demo_trade = false
-live_trade_ack = I_ACCEPT_REAL_MONEY_RISK
-kill_switch = false
 order_enabled = true
+dry_run_enforce = false
+allow_demo_trade = true
+# allow_live_trade = true  ; legacy compatibility (optional; no extra gating)
+kill_switch = false
 expected_account_server =
 expected_login =
 magic_number =

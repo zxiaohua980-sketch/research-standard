@@ -13,6 +13,8 @@ This standard fixes two blocking risks in MT5/FX research:
 
 For Phase 2+ work, either risk makes the result non-decision-grade. A candidate cannot be
 frozen, handed to runtime packaging, or used for OOS/forward claims until both gates pass.
+For hard contamination findings (cross-version path or loose shared-output name), candidate
+classification is blocked (`version_isolation_unverified`) rather than merely downgraded.
 
 When the task is explicitly audit, hardening, lookahead repair, replay-difference
 investigation, or candidate approval, also follow `STRICT_AUDIT_ENFORCEMENT_STANDARD.md`.
@@ -186,7 +188,7 @@ execution/cost/gap policy and not to future information, state drift or cross-ve
 
 ---
 
-## 5. One Version, One Folder
+## 5. One Version, One Folder（强制）
 
 Every Phase 2+ candidate version must have its own version root. Backtest outputs, reports,
 audit files, caches and runtime handoff records from one version must not be used by another
@@ -200,6 +202,15 @@ When opening a new Phase 2+ version:
 4. use a new Codex thread/conversation for the new version, or explicitly restart context from
    the handoff and mark `context_contamination_risk`;
 5. re-audit the copied baseline before modifying the new version.
+
+Before formal iteration starts on the new version, perform a **context purge**:
+
+- move non-active context artifacts for previous versions (for example old `PROJECT_STATE.md`,
+  old `NEW_VERSION_HANDOFF.md`, old `CLEANUP_LOG.md` references, loose `idea_note` / `history_context`)
+  into `<new_version_root>/_trash_review/context/`;
+- do not keep stale context files as active references for the new version;
+- log purge artifacts + timestamps in `CLEANUP_LOG.md` and record `context_reset_status` as
+  `new_thread`, `context_restarted_from_handoff`, or `context_contamination_risk`.
 
 Required structure:
 
@@ -235,7 +246,7 @@ Allowed shared input:
 - immutable raw market data snapshots under a declared shared data root;
 - each shared snapshot must be read-only by convention and recorded with source, date range and hash.
 
-Forbidden cross-version input:
+Forbidden cross-version input (hard blocked in Phase 2+):
 
 - reading `versions/v0_1/backtests/` while running `versions/v0_2`;
 - editing the parent version's active `.py` when the intended work is a child version;
@@ -243,6 +254,28 @@ Forbidden cross-version input:
 - relying on loose names such as `latest.csv`, `final.csv`, `best.csv`, `new.csv`, `copy`, `副本`, or `saved_runs`;
 - hard-coding an absolute path to an older version's output;
 - writing Phase 2+ outputs outside the active version root.
+
+### 5A. Physical Isolation Naming Contract
+
+To prevent version confusion, file-level writes/readbacks in Phase 2+ must include version/root in path:
+
+- `backtests/`, `reports/`, `audits/`, `cache/`, `logs/` under `versions/<version>/`;
+- `run_YYYYMMDDTHHMMSSZ_<run_id>/` for backtest run folders;
+- no bare filenames for reusable evidence (including `latest`, `final`, `best`, `new`, `copy`, `副本`, `saved_runs`).
+
+Any code/path that uses loose names is treated as mixed-version evidence and must be moved to
+`_trash_review/` before the version is promoted.
+
+## 5B. Context Purge Contract (Phase 2+)
+
+Context reset is part of phase integrity. Only one active context may drive a version:
+
+- current `NEW_VERSION_HANDOFF.md` and current `PROJECT_STATE.md` (if present) are permitted as
+  the active context entry;
+- previous versions' context files and notes must be quarantined under
+  `version_root/_trash_review/<timestamp>/context/`;
+- unresolved `context_contamination_risk` blocks freeze/runtime handoff until a new context entry
+  and cleanup evidence are recorded.
 
 Version comparison is allowed only as a reporting task. The comparison tool may read frozen
 summary manifests from parent versions, but it must not feed parent-version trades, signals,

@@ -17,10 +17,13 @@
 
 ```text
 context_reset_status: new_thread | context_restarted_from_handoff | context_contamination_risk
+context_purge_status: PASS | BLOCK
+context_purge_dir:
 ```
 
 - new_thread_id_or_note:
 - prior_thread_summary_ref:
+- archived_old_context_refs:
 - context_files_to_read_first:
   - version_manifest.yaml
   - config/

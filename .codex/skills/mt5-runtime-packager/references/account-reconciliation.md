@@ -65,8 +65,8 @@ Rules:
 
 - Use a different `magic_number` for every strategy/version/environment that may run on the same MT5 account.
 - Use a short `comment_prefix` namespace for every runtime. Do not hardcode comments like `ma_monitor` across projects.
-- Keep MT5 comments short. Many brokers truncate comments around 31 characters, so store the full `intent_id` locally and embed only a short `comment_id` in MT5.
-- Use a comment format such as `{comment_prefix} {comment_id}`, for example `MA11D 4f7a9c2d`.
+- Keep MT5 comments short. Many brokers truncate comments around 31 characters, so store the full `intent_id` locally and embed only the current timeframe plus a short `comment_id` in MT5.
+- Use a signal-open comment format such as `{comment_prefix}_{timeframe}_{intent8}`. Example: `trendline_strategy_M15_a1b2c3d4`. Do not use an opaque suffix without the timeframe.
 - On startup, treat `magic_number` match plus comment-prefix mismatch as manual review. Do not manage positions that may belong to another runtime.
 
 ## Intent ID Generation
@@ -86,7 +86,7 @@ def new_intent_ids(symbol: str, action: str) -> tuple[str, str]:
     return f"{ts}-{symbol}-{action}-{short}", short
 ```
 
-Store the full `intent_id` locally. Put only `comment_id` plus a short configurable `comment_prefix` into MT5 `comment`.
+Store the full `intent_id` locally. Put the configurable `comment_prefix`, current timeframe, and short `comment_id` into MT5 `comment`; e.g. `trendline_strategy_M30_9f7e2a1b`.
 
 ## Atomic JSON Write Pattern
 
@@ -148,7 +148,7 @@ Before scanning for new signals:
 1. Connect or reconnect to MT5.
 2. If `mt5.initialize()` fails, log `mt5.last_error()`, enter safe mode, and do not send orders.
 3. If `mt5.terminal_info()` returns `None`, treat MT5 as unavailable, log the condition, and do not send orders.
-4. Reject REAL accounts and blocked trade state.
+4. Reject account/mode combinations blocked by the runtime profile (for example, DEMO/CONTEST + `mode=live_trade`, or `trade_allowed=false`).
 5. Load unresolved local intents. Quarantine corrupt intent records instead of guessing.
 6. Query `positions_get()` for current open positions.
 7. Query `orders_get()` for current pending orders.
@@ -366,3 +366,51 @@ manual_review_file
 action_gate
 decision
 ```
+
+## Execution Reconciliation Record Fields
+
+Each closed or unresolved open/close intent must keep an explicit reconciliation row in one of:
+
+- `logs/orders_journal.csv` or `logs/execution_lifecycle_log.csv`
+- `logs/order_journal.jsonl` / `logs/order_intents.jsonl` append rows
+
+Preferred columns for each lifecycle row:
+
+```text
+ts_utc
+intent_id
+status
+symbol
+side
+volume
+request_id
+actual_position_ticket
+theoretical_entry_price
+actual_open_price
+theoretical_close_price
+actual_close_price
+theoretical_sl_price
+actual_sl
+theoretical_tp_price
+actual_tp
+entry_slippage_points
+exit_slippage_points
+actual_commission
+actual_fee
+actual_swap
+theoretical_pnl_cash
+actual_net_profit
+pnl_delta_cash
+```
+
+Implementation rule:
+- For a close row, `theoretical_entry_price`/`actual_open_price` pair comes from the original open intent.
+- `theoretical_close_price` should be the close request price used at send time, not a rounded fallback.
+- `actual_close_price` should come from the matching close deal price if available.
+- `entry_slippage_points` and `exit_slippage_points` should be non-empty only when the corresponding actual fill price is available.
+- `actual_net_profit` should include `profit + commission + fee + swap` when deal fields exist.
+- Never force `actual_*` zero for unresolved rows; keep empty and require manual review.
+
+If a close intent is confirmed by ticket disappearance but close deal matching is still missing, keep
+`actual_close_price`/`actual_net_profit` empty and flag manual review, instead of silently treating it as
+zero-profit.

@@ -114,6 +114,8 @@ batch_vs_incremental: PASS | FAIL | NOT_RUN | NOT_APPLICABLE
 - active_py_file:
 - parent_active_py_copied: yes/no/NA
 - context_reset_status: new_thread/context_restarted_from_handoff/context_contamination_risk/NA
+- context_purge_status: PASS | BLOCK | NA
+- context_purge_ref:
 - mutable_inputs_under_version_root: yes/no
 - outputs_under_version_root: yes/no
 - immutable_shared_data_hashes:

@@ -56,6 +56,7 @@
 - survivorship/missing rows:
 - output required fields:
 - batch_vs_incremental_replay:
+- context purge evidence:
 
 ## Strict Audit Enforcement
 

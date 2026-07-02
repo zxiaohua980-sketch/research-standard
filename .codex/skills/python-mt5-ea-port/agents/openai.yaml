@@ -1,0 +1,4 @@
+interface:
+  display_name: "Python¡úMT5 EA Port"
+  short_description: "Port Python MT5 strategies to MQL5 EAs with strict parity."
+  default_prompt: "Convert this Python MT5 strategy into a logically equivalent MT5 EA with closed-bar timing, audit logs, and Python-vs-EA validation."

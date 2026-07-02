@@ -4,11 +4,12 @@
 
 This standard governs Phase 3 MT5 dry-run/demo/live runtime packaging after a candidate has
 passed the required research gates. It converts a frozen candidate into a portable,
-auditable Windows EXE for dry-run, DEMO, or user-authorized LIVE monitoring/trading.
+auditable Windows EXE for dry-run, DEMO, or LIVE monitoring/trading.
 
 Runtime packaging validates execution plumbing and operational safety. It does not validate
 strategy profitability and does not create OOS-Final evidence. REAL account trading is allowed
-only through the explicit user-authorized `live_trade` path in `LIVE_TRADING_AUTHORIZATION_STANDARD.md`.
+under explicit user intention via `live_trade` mode, using the same technical gate checks as
+demo orders, as required by `LIVE_TRADING_AUTHORIZATION_STANDARD.md`.
 
 ## Scope And Trigger
 
@@ -47,11 +48,13 @@ The old blanket REAL-account prohibition is removed. A package may be marked `us
 - the exact EXE/config has passed static audit and direct EXE smoke/log check;
 - demo order path or equivalent runtime smoke has passed broker-state reconciliation;
 - the user explicitly requests live/实盘 for this strategy/runtime;
-- `config.ini` has `mode = live_trade`, `allow_live_trade = true`, and `live_trade_ack = I_ACCEPT_REAL_MONEY_RISK`;
+- `config.ini` explicitly indicates live run intent, typically `mode = live_trade`;
 - expected account server/login are either configured and matched, or intentionally left blank by the user;
 - startup reconciliation, signal ledger, intent journal, max position/volume/order gates, cost-inclusive sizing, and kill switch are active.
 
-A REAL account is therefore a warning state that requires explicit authorization and config matching, not an automatic blocker. Stage 13 paperwork, Gate A/B forward sample size, or registry `production_live=false` must not mechanically block the user's own-capital live trial when the above technical safety gates pass.
+A REAL account is therefore not an automatic blocker. Stage 13 paperwork, Gate A/B forward
+sample size, or registry `production_live=false` must not mechanically block the user's own-capital
+live trial when the same demo-level technical safety gates pass.
 
 ## Direct EXE Contract
 
@@ -151,7 +154,7 @@ caches, local test configs, or machine-specific files as the operator copy folde
   `history_future_buffer_hours`, `order_confirm_timeout_seconds`,
   `order_confirm_poll_interval_seconds`, `unknown_freeze_new_orders`;
 - logging: `log_dir=.\logs`, runtime/error/reconciliation/order/position log switches;
-- safety: `kill_switch`, `allow_demo_trade`, `allow_live_trade`, `dry_run_enforce`.
+- safety: `kill_switch`, `order_enabled`, `allow_demo_trade`, `dry_run_enforce`.
 
 The account type must be read from MT5 and printed at runtime. Do not infer DEMO/REAL status
 from the EXE name, BAT name, folder name, or config label.
@@ -416,7 +419,7 @@ At minimum, a runtime that can send DEMO orders must create:
 Startup sequence:
 
 1. connect/reconnect MT5;
-2. reject REAL accounts unless `mode=live_trade`, `allow_live_trade=true`, `live_trade_ack=I_ACCEPT_REAL_MONEY_RISK`, and the user has explicitly authorized live use;
+2. reject REAL accounts unless `mode=live_trade`, and the user has explicitly authorized live use;
 3. load local intent journal and quarantine corrupt partial records;
 4. query positions by magic;
 5. query pending orders by magic;
@@ -432,8 +435,8 @@ Broker state is authoritative. Local intent files are context, not the source of
 
 Order-capable runtimes must enforce:
 
-- REAL account rejection by default, with user-authorized live override only through `mode=live_trade`, `allow_live_trade=true`, and `live_trade_ack=I_ACCEPT_REAL_MONEY_RISK`;
-- `allow_live_trade=false` as the default safe value, but `true` is allowed for an explicitly authorized live package;
+- LIVE mode uses the same technical gate set as demo runtime plus explicit `live_trade` user intention;
+- `allow_live_trade` / `live_trade_ack` are legacy compatibility fields and are not primary gates;
 - DEMO/LIVE order execution only when explicitly configured and authorized;
 - `kill_switch=false`;
 - MT5 `trade_allowed=True`;
@@ -581,7 +584,7 @@ Use these labels:
 - `runtime_blocked`: entry gate, preflight, audit, or safety check failed;
 - `dry_run_ready`: direct EXE dry-run monitor passed, no order sending;
 - `demo_ready`: authorized DEMO order path passed broker-state reconciliation;
-- `user_authorized_live_ready`: exact EXE/config is configured for REAL trading by explicit user choice and passed live gate checks;
+- `user_authorized_live_ready`: exact EXE/config is configured for REAL trading by explicit user choice and passed live gate checks (legacy alias; equivalent to `demo_ready` + explicit `mode=live_trade`).
 - `live_trial_active`: REAL account runtime has started; results are real-money operational records, not backtest/OOS-Final proof;
 - `portable_package_ready`: portable folder and copy-path smoke passed.
 

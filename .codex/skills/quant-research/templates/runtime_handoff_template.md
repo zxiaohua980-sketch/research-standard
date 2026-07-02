@@ -30,8 +30,9 @@
 
 ```ini
 mode = dry_run
-allow_demo_trade = false
-allow_live_trade = false
+order_enabled = false
+require_trade_allowed_for_orders = true
+# allow_live_trade = false  ; legacy compatibility, optional
 dry_run_enforce = true
 kill_switch = false
 terminal_path =
@@ -41,9 +42,8 @@ tmp_dir = .\tmp
 
 ## Verification
 
-- [ ] run_status.bat checked
-- [ ] run_dry_run.bat checked
-- [ ] REAL account hard rejection checked
+- [ ] run EXE directly and verify startup prints account/login/magic/status
+- [ ] live mode blocked in DEMO/CONTEST and LIVE mode requires explicit `mode=live_trade`
 - [ ] demo order mode disabled by default
 - [ ] signal execution ledger present
 - [ ] order intent journal present if demo orders are enabled

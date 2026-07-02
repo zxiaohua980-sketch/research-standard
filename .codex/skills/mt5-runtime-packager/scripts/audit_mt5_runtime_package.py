@@ -343,26 +343,33 @@ def main() -> int:
     )
 
     allow_live_false = re.search(r"^\s*allow_live_trade\s*=\s*false\s*$", config_text, re.I | re.M) is not None
-    allow_live_true = re.search(r"^\s*allow_live_trade\s*=\s*true\s*$", config_text, re.I | re.M) is not None
     live_mode = (config_value(config_text, "mode") or "").lower() == "live_trade"
-    live_ack = (config_value(config_text, "live_trade_ack") or "").strip()
-    live_profile_ok = live_mode and allow_live_true and live_ack == "I_ACCEPT_REAL_MONEY_RISK"
+    live_order_enabled = re.search(
+        r"^\s*order_enabled\s*=\s*true\s*$", config_text, re.I | re.M
+    ) is not None
+    live_not_dry = (
+        re.search(r"^\s*dry_run_enforce\s*=\s*false\s*$", config_text, re.I | re.M) is not None
+    )
+    live_switch_clear = (
+        re.search(r"^\s*kill_switch\s*=\s*false\s*$", config_text, re.I | re.M) is not None
+    )
+    live_profile_ok = live_mode and live_order_enabled and live_not_dry and live_switch_clear
     result(
         rows,
         "PASS" if (allow_live_false or live_profile_ok) else "FAIL",
         "config_live_trade_authorization_gate",
         (
-            "allow_live_trade=false default safe gate"
+            "allow_live_trade=false is only a legacy field"
             if allow_live_false
-            else "explicit live_trade authorization present"
+            else "explicit live order mode/profile present"
             if live_profile_ok
-            else "allow_live_trade=true requires mode=live_trade and live_trade_ack=I_ACCEPT_REAL_MONEY_RISK"
+            else "live mode requires mode=live_trade, order_enabled=true, dry_run_enforce=false, kill_switch=false"
         ),
     )
 
     default_mode = (config_value(config_text, "mode") or "dry_run").lower()
-    demo_default = default_mode == "demo_trade"
-    if demo_default:
+    order_mode = default_mode in {"demo_trade", "live_trade"}
+    if order_mode:
         demo_profile_checks = {
             "allow_demo_trade": "true",
             "dry_run_enforce": "false",
@@ -378,7 +385,9 @@ def main() -> int:
             rows,
             "PASS" if not missing else "FAIL",
             "config_default_demo_order_profile",
-            "default demo_trade is explicitly enabled and DEMO-only" if not missing else "missing " + ", ".join(missing),
+            f"default {default_mode} is explicitly enabled and order-enabled"
+            if not missing
+            else "missing " + ", ".join(missing),
         )
     else:
         dry_profile_checks = {
@@ -484,7 +493,7 @@ def main() -> int:
     )
 
     real_markers = ["TRADE_MODE_REAL", "trade_mode == 2", "trade_mode==2", "trade_mode_label"]
-    live_gate_markers = ["allow_live_trade", "live_trade_ack", "live_trade", "I_ACCEPT_REAL_MONEY_RISK"]
+    live_gate_markers = ["live_trade", "mode == \"live_trade\"", "mode=='live_trade'", "mode == 'live_trade'", "order_enabled"]
     demo_only_markers = ["TRADE_MODE_DEMO", "trade_mode == 0", "trade_mode==0", "0=DEMO", "REAL account is rejected"]
     real_gate_ok = contains_any(executor_text, demo_only_markers) or (
         contains_any(executor_text, real_markers) and contains_any(executor_text, live_gate_markers)
@@ -493,7 +502,7 @@ def main() -> int:
         rows,
         "PASS" if real_gate_ok else "FAIL",
         "real_account_authorization_gate",
-        "executor should either hard reject REAL accounts or require explicit live_trade authorization gates",
+        "executor should either reject DEMO-only mode or require live mode/order-enabled runtime checks for REAL accounts",
     )
     can_send_orders = "order_send" in executor_text
     lower_executor = executor_text.lower()
@@ -1117,7 +1126,16 @@ def main() -> int:
         "demo_trade_lifecycle",
         "actual_net_profit",
         "theoretical_entry_price",
+        "actual_open_price",
         "actual_commission",
+        "actual_sl",
+        "actual_tp",
+        "theoretical_close_price",
+        "actual_close_price",
+        "theoretical_pnl_cash",
+        "pnl_delta_cash",
+        "entry_slippage_points",
+        "exit_slippage_points",
     ]
     result(
         rows,

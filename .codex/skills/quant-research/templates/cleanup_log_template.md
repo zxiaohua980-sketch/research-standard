@@ -19,6 +19,14 @@
 |---------------|-------------------|------------------|------------------|
 | | | | |
 
+## Context Memory Purged
+
+| context_file | archived_to | reason | reviewer |
+|--------------|-------------|--------|----------|
+| PROJECT_STATE.md | | old project context | |
+| NEW_VERSION_HANDOFF.md | | historical handoff snapshots | |
+| idea notes / loose context notes | | stale context reference | |
+
 ## Preserved Evidence
 
 Confirm these were not deleted:

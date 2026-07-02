@@ -56,7 +56,7 @@ comment_prefix =
 mt5_comment_max_length = 16
 ```
 
-The common module hard-rejects REAL accounts. Do not weaken that in a skill-derived runtime.
+The common module supports LIVE under `live_trade` mode and applies the same practical order safety checks as DEMO; do not add extra hard LIVE rejections here.
 
 ## Market/Open Entry Price Pattern
 
@@ -310,6 +310,31 @@ for position in magic_positions(mt5, gates.magic, "EURUSD"):
 ```
 
 If close confirmation fails, enter manual review or quarantine. Do not assume the close succeeded.
+
+## Execution Reconciliation / Slippage & P/L Fields
+
+When a runtime writes `orders_journal.csv`, `execution_lifecycle_log.csv`, or intent rows, include:
+
+- open reconciliation:
+  - `theoretical_entry_price` (request price)
+  - `actual_open_price` (position `price_open`)
+  - `entry_slippage_points = abs(actual_open_price - theoretical_entry_price) / point`
+- close reconciliation:
+  - `theoretical_close_price` (market close request price)
+  - `actual_close_price` (matched close deal price)
+  - `exit_slippage_points = abs(actual_close_price - theoretical_close_price) / point`
+- P/L and cost:
+  - `theoretical_pnl_cash` (price-difference estimate for executed volume)
+  - `actual_net_profit` (from close deal: `profit + commission + swap + fee`)
+  - `pnl_delta_cash = actual_net_profit - theoretical_pnl_cash`
+  - `actual_commission`, `actual_fee`, `actual_swap` (if present)
+
+If `actual_close_price` cannot be matched immediately, keep fields empty and keep state in manual review / quarantine until confirmed.
+
+`mt5_runtime_common.py` exposes these helpers:
+
+- `estimate_cash_pnl(...)`
+- `lookup_close_deal(...)`
 
 ## Packaging Notes
 

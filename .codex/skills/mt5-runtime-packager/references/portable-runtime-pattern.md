@@ -179,8 +179,8 @@ delivery `logs\` and optional `data_cache\` back to empty.
 Answer before declaring the package ready:
 
 1. Does default config prevent orders?
-2. Does demo mode require both CLI `--mode demo_trade` and `allow_demo_trade=true`?
-3. Is REAL account hard rejected regardless of config?
+2. Does demo mode require both CLI `--mode demo_trade` (or `mode=demo_trade`) and `allow_demo_trade=true`/`order_enabled=true`?
+3. Are REAL-account runtimes only allowed in explicit live mode (`mode=live_trade`) and otherwise blocked?
 4. Are generated files written under the EXE directory, not PyInstaller temp and not MT5 source folders?
 5. Is the terminal/data path auto-discovered or externally configured?
 6. Does the final operator folder contain exactly one runnable EXE, beside-EXE `config.ini`, and

@@ -21,6 +21,8 @@ parent_active_py_file:
 parent_active_py_file_hash:
 new_version_handoff:
 context_reset_status: new_thread  # new_thread | context_restarted_from_handoff | context_contamination_risk
+context_purge_status: PASS  # PASS | BLOCK
+context_purge_ref:
 data_snapshot_hashes:
 batch_backtest_ref:
 bar_by_bar_replay_ref:

@@ -33,8 +33,10 @@ First read the nearest project `AGENTS.md`. If available, also read the strategy
 - If a Phase 2+ version lacks its own `versions/<version>/` root and manifest, formal metrics are blocked as `version_isolation_unverified`.
 - If a Phase 2+ new version has not copied the parent active `.py` into its own version root, formal metrics are blocked as `active_py_not_isolated`.
 - If a Phase 2+ new version reused an old long conversation without a new thread or handoff restart, mark `context_contamination_risk`.
+- Before starting a new formal version cycle, quarantine legacy context artifacts (`PROJECT_STATE.md`, prior handoff/context notes) into current version `_trash_review/context/` and record the action in `CLEANUP_LOG.md`; only the active version handoff may be used as context.
 - If a multi-timeframe strategy lacks MTF timing evidence, formal metrics are blocked as `mtf_timing_unverified`.
 - If an audit task has not satisfied Strict Audit Enforcement Mode, promotion/approval is blocked as `strict_audit_unverified`.
+- If `version_isolation_check` (strict mode) reports cross-version references, loose names, or output-outside-root, classify as BLOCK for Phase 2+/handoff work.
 - Do not touch frozen or forward-live strategy code in place.
 - Do not place REAL orders or enable REAL-account trading unless the user explicitly authorizes this specific runtime and the package satisfies `LIVE_TRADING_AUTHORIZATION_STANDARD.md`; never treat demo/runtime logs as OOS-Final evidence.
 - Clean temporary and invalid outputs promptly, but never delete raw data, manifests, audits,
@@ -121,14 +123,15 @@ Goal: turn a promising idea into an auditable candidate.
 1. Require minimal registry, `version.json`, and one isolated `versions/<version>/` root.
 2. When opening a new version, create a new subdirectory, copy the parent active `.py` into a
    new standalone active `.py` file, and do not modify the parent active `.py`.
-3. Start a new thread/conversation for the child version; if unavailable, create
-   `NEW_VERSION_HANDOFF.md` and restart context from it, marking `context_contamination_risk`.
+3. Start a new thread/conversation for the child version; before formal iteration, purge legacy context artifacts
+   from previous versions into `versions/<new_version>/_trash_review/context/`. If thread restart is unavailable,
+   create `NEW_VERSION_HANDOFF.md`, restart context from it, and mark `context_contamination_risk`.
 4. Record Git state before formal runs.
 5. Freeze the copied baseline's current rules, then re-audit before changing logic.
 6. Run full execution audit before using metrics for decisions.
 7. For audit/hardening/approval tasks, apply Strict Audit Enforcement Mode before any optimization or promotion.
 8. If MTF/resampling/higher-timeframe features are used, run `templates/mtf_timing_audit_template.md` and block unless `feature_available_at <= decision_time` is proven.
-9. Run version isolation check before formal backtests; outputs must stay inside the active version root and mutable inputs must not come from sibling versions.
+9. Run `version_isolation_check.py` in strict mode before formal backtests; outputs must stay inside the active version root and mutable inputs must not come from sibling versions.
 10. Produce baseline results, RR platform analysis, and attribution.
 11. For any logic/risk/exit/sizing/cost change, write a bounded change proposal and create a new version or experiment branch.
 12. Re-audit after changes and compare parent vs child versions.
@@ -146,7 +149,7 @@ Goal: package and verify a frozen candidate as a safe dry-run/demo runtime, or a
 1. Require frozen candidate identity: strategy id, version, version root, commit, config hash, MTF timing audit if applicable, version isolation check, and bar-by-bar replay report.
 2. Create runtime handoff using `templates/runtime_handoff_template.md`.
 3. Use the `mt5-runtime-packager` skill for EXE packaging, MT5 path portability, dry-run/demo/live safety gates, order-intent journaling, signal execution ledger, startup reconciliation and portable deliverables.
-4. Default to dry-run. Demo order execution requires explicit user authorization. REAL order execution is allowed only when the user explicitly requests live/实盘 and `config.ini` has `mode=live_trade`, `allow_live_trade=true`, and `live_trade_ack=I_ACCEPT_REAL_MONEY_RISK`.
+4. Default to dry-run. Demo order execution requires explicit user authorization. LIVE order execution is allowed only when the user explicitly requests live/实盘 and `mode=live_trade`, using the same technical gate checks as demo order execution.
 5. Record EXE hash, config hash, build command, runtime audit, safety state and smoke-test result.
 6. Decide only: `runtime_blocked`, `dry_run_ready`, `demo_ready`, `user_authorized_live_ready`, `live_trial_active`, or `portable_package_ready`.
 
@@ -159,8 +162,9 @@ Apply gates by phase:
 - Phase 1: light gates only: fatal audit, evidence label, independent exploration file/folder,
   and cleanup of obvious temporary outputs. Full registry/data ledger is not mandatory.
 - Phase 2: version gates: minimal registry milestone, Git/version identity, isolated version
-  root, copied active `.py`, context reset/handoff, execution audit, MTF timing audit when
-  applicable, attribution, cleanup log, data split discipline and bar-by-bar replay.
+  root, copied active `.py`, context reset/handoff + context purge, execution audit, strict version-isolation
+  check (`version_isolation_check.py --strict`), MTF timing audit when applicable,
+  attribution, cleanup log, data split discipline and bar-by-bar replay.
 - Phase 3: strict gates: frozen candidate handoff, strict audit clean status, runtime safety
   gates, explicit live authorization when applicable, portable package audit and clean deliverable folder.
 
@@ -227,6 +231,7 @@ Phase 1:
 - phase and evidence label;
 - hypothesis tested;
 - fatal audit status;
+- context status (if new thread impossible -> `context_contamination_risk`);
 - key metrics/RR matrix summary;
 - winner/loss attribution;
 - decision and next iteration.
@@ -236,6 +241,7 @@ Phase 2:
 - registry/version/Git status;
 - active `.py` copy status;
 - context reset/new thread status;
+- context purge status + cleanup archive path:
 - audit status;
 - strict audit status if the task is audit/hardening/approval;
 - MTF timing audit status, if applicable;

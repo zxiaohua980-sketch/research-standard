@@ -2,8 +2,9 @@
 """Reusable MT5 runtime helpers for portable Python/EXE monitors.
 
 Copy this module into a runtime package when useful. Do not import it from the
-global skill directory inside a packaged EXE. Order helpers are safe-gated by
-default: REAL accounts are rejected unless explicit live_trade config gates are present.
+global skill directory inside a packaged EXE. Order helpers use the same technical
+gating for demo and live modes: REAL is allowed in `live_trade` mode with the
+same safety checks as demo order paths.
 """
 from __future__ import annotations
 
@@ -93,12 +94,112 @@ def point_tick_info(mt5: Any, symbol: str) -> tuple[float, float, dict[str, Any]
     meta = {
         "digits": getattr(info, "digits", ""),
         "point": point,
+        "trade_tick_size": tick_size,
         "tick_size": tick_size,
         "trade_contract_size": getattr(info, "trade_contract_size", ""),
         "currency_base": getattr(info, "currency_base", ""),
         "currency_profit": getattr(info, "currency_profit", ""),
+        "trade_tick_value": float(getattr(info, "trade_tick_value", 0.0) or 0.0),
+        "trade_tick_value_profit": float(getattr(info, "trade_tick_value_profit", 0.0) or 0.0),
     }
     return point, tick_size, meta
+
+
+def _safe_float(value: Any, default: float = 0.0) -> float:
+    """Best-effort conversion that avoids exceptions."""
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _trade_direction_from_position_type(mt5: Any, position_type: int | float | str) -> float:
+    if str(position_type).strip().upper() in {"BUY", "LONG", "1"}:
+        return 1.0
+    if str(position_type).strip().upper() in {"SELL", "SHORT", "2"}:
+        return -1.0
+    try:
+        if str(position_type) == str(getattr(mt5, "POSITION_TYPE_BUY", "BUY")):
+            return 1.0
+    except Exception:
+        pass
+    return -1.0
+
+
+def estimate_cash_pnl(
+    mt5: Any,
+    symbol: str,
+    position_type: int | float | str,
+    open_price: float,
+    close_price: float,
+    volume: float,
+) -> float | None:
+    """Estimate position PnL from prices + symbol tick metadata.
+
+    This is a broker-side approximation for execution-lifecycle logs. Actual profit should
+    still prefer history-deal evidence when available (real close deals).
+    """
+    open_price = _safe_float(open_price)
+    close_price = _safe_float(close_price)
+    volume = max(0.0, _safe_float(volume))
+    if volume <= 0:
+        return None
+    _, tick_size, meta = point_tick_info(mt5, symbol)
+    tick_value = _safe_float(meta.get("trade_tick_value")) or _safe_float(meta.get("trade_tick_value_profit"))
+    if tick_size <= 0 or tick_value <= 0:
+        return None
+    move_ticks = (close_price - open_price) / tick_size
+    direction = _trade_direction_from_position_type(mt5, position_type)
+    return direction * move_ticks * tick_value * volume
+
+
+def lookup_close_deal(
+    mt5: Any,
+    symbol: str,
+    position_ticket: int,
+    since_utc: datetime,
+    until_utc: datetime | None = None,
+) -> dict[str, Any] | None:
+    """Find the first close-related deal for a position ticket in MT5 history."""
+    if until_utc is None:
+        until_utc = datetime.now(timezone.utc)
+    if until_utc <= since_utc:
+        return None
+    try:
+        deals = mt5.history_deals_get(since_utc, until_utc) or []
+    except Exception:
+        return None
+    best: dict[str, Any] | None = None
+    best_time = None
+    for deal in deals:
+        if str(getattr(deal, "symbol", "")).strip().upper() != str(symbol).strip().upper():
+            continue
+        d_volume = _safe_float(getattr(deal, "volume", 0.0))
+        if d_volume <= 0:
+            continue
+        position_id = _safe_float(getattr(deal, "position_id", getattr(deal, "position", 0)))
+        if position_id and int(position_id) != int(position_ticket):
+            continue
+        ts = getattr(deal, "time", None)
+        if not ts:
+            continue
+        deal_time = datetime.fromtimestamp(float(ts), tz=timezone.utc)
+        if best_time is None or deal_time >= best_time:
+            best = {
+                "deal": getattr(deal, "ticket", ""),
+                "order": getattr(deal, "order", ""),
+                "time": ts,
+                "time_msc": getattr(deal, "time_msc", None),
+                "price": _safe_float(getattr(deal, "price", 0.0)),
+                "volume": d_volume,
+                "profit": _safe_float(getattr(deal, "profit", 0.0)),
+                "commission": _safe_float(getattr(deal, "commission", 0.0)),
+                "fee": _safe_float(getattr(deal, "fee", 0.0)),
+                "swap": _safe_float(getattr(deal, "swap", 0.0)),
+                "comment": str(getattr(deal, "comment", "")),
+            }
+            best_time = deal_time
+    return best
 
 
 def calculate_enhanced_zigzag(
@@ -754,7 +855,7 @@ def mt5_account_state_blockers(
     require_trade_allowed: bool = True,
     require_zero_magic_positions: bool = False,
     require_zero_magic_orders: bool = False,
-    allow_real_account: bool = False,
+    allow_real_account: bool = True,
 ) -> list[str]:
     """Return blockers for order-enabled runtime startup.
 
@@ -777,7 +878,7 @@ def mt5_account_state_blockers(
             f"account_login mismatch: expected {expected_login}, got {snapshot.get('account_login')}"
         )
     if snapshot.get("trade_mode_label") == "REAL" and not allow_real_account:
-        blockers.append("REAL account is rejected unless explicit live_trade authorization is enabled")
+        blockers.append("REAL account is blocked by runtime configuration")
     if require_trade_allowed and not bool(snapshot.get("trade_allowed", False)):
         blockers.append("trade_allowed is false")
     if require_zero_magic_positions and int(snapshot.get("magic_positions_count", 0)) != 0:
@@ -842,24 +943,18 @@ class DemoTradeGates:
 
 
 def demo_trade_gate_reasons(mt5: Any, gates: DemoTradeGates) -> list[str]:
-    """Return order gate blockers for demo or explicitly-authorized live trading."""
+    """Return order gate blockers for demo and live trading under the same technical checks."""
     reasons: list[str] = []
     account = mt5.account_info()
     terminal = mt5.terminal_info()
     mode = str(getattr(gates, "mode", "demo_trade") or "demo_trade").lower()
-    live_requested = mode == "live_trade" or bool(getattr(gates, "allow_live_trade", False))
-    live_ack_ok = str(getattr(gates, "live_trade_ack", "")) == "I_ACCEPT_REAL_MONEY_RISK"
+    live_requested = mode == "live_trade"
     if gates.kill_switch:
         reasons.append("kill_switch=true")
     if gates.dry_run_enforce:
         reasons.append("dry_run_enforce=true")
     if live_requested:
-        if mode != "live_trade":
-            reasons.append("allow_live_trade=true requires mode=live_trade")
-        if not gates.allow_live_trade:
-            reasons.append("allow_live_trade=false")
-        if not live_ack_ok:
-            reasons.append("live_trade_ack must equal I_ACCEPT_REAL_MONEY_RISK")
+        pass
     else:
         if not gates.allow_demo_trade:
             reasons.append("allow_demo_trade=false")
@@ -876,8 +971,8 @@ def demo_trade_gate_reasons(mt5: Any, gates: DemoTradeGates) -> list[str]:
         reasons.append("MT5 terminal_info unavailable")
     trade_mode = int(getattr(account, "trade_mode", -1))
     if trade_mode == TRADE_MODE_REAL:
-        if not (live_requested and live_ack_ok and gates.allow_live_trade and mode == "live_trade"):
-            reasons.append("REAL account requires explicit live_trade authorization")
+        if not live_requested:
+            reasons.append("live money account requires mode=live_trade")
     elif trade_mode in (TRADE_MODE_DEMO, TRADE_MODE_CONTEST):
         if live_requested:
             reasons.append("live_trade mode requires a REAL account; use demo_trade for DEMO/CONTEST")
@@ -993,7 +1088,7 @@ def send_market_order_once(
     tick = mt5.symbol_info_tick(symbol)
     if info is None or tick is None:
         return {"status": "blocked_no_symbol_tick", "sent": False}
-    _, tick_size, _ = point_tick_info(mt5, symbol)
+    point, tick_size, _ = point_tick_info(mt5, symbol)
     volume = normalize_volume(info, requested_volume)
     order_type = mt5.ORDER_TYPE_BUY if side == "BUY" else mt5.ORDER_TYPE_SELL
     entry_price = float(tick.ask if side == "BUY" else tick.bid)
@@ -1055,6 +1150,10 @@ def send_market_order_once(
     if conflicts and not confirmed:
         status = "unknown_requires_manual_review"
     position = confirmed[0] if confirmed else None
+    actual_open_price = getattr(position, "price_open", "") if position else ""
+    entry_slippage_points: float | str = ""
+    if position and _safe_float(actual_open_price) and point > 0:
+        entry_slippage_points = abs(_safe_float(actual_open_price) - request["price"]) / point
     summary = {
         "intent_id": intent_id,
         "signal_key": signal_key,
@@ -1074,6 +1173,13 @@ def send_market_order_once(
         "actual_open_price": getattr(position, "price_open", "") if position else "",
         "actual_sl": getattr(position, "sl", "") if position else "",
         "actual_tp": getattr(position, "tp", "") if position else "",
+        "theoretical_close_price": "",
+        "actual_close_price": "",
+        "theoretical_pnl_cash": "",
+        "actual_net_profit": "",
+        "pnl_delta_cash": "",
+        "entry_slippage_points": entry_slippage_points,
+        "exit_slippage_points": "",
     }
     if intent_journal is not None:
         append_jsonl(intent_journal, {k: v for k, v in summary.items() if k != "request"})
@@ -1098,18 +1204,25 @@ def close_position_once(
     tick = mt5.symbol_info_tick(symbol)
     if tick is None:
         return {"status": "blocked_no_tick", "closed": False, "ticket": ticket}
-    _, tick_size, _ = point_tick_info(mt5, symbol)
+    point, tick_size, _ = point_tick_info(mt5, symbol)
     close_type = mt5.ORDER_TYPE_SELL if int(getattr(position, "type", 0)) == mt5.POSITION_TYPE_BUY else mt5.ORDER_TYPE_BUY
     price = float(tick.bid if close_type == mt5.ORDER_TYPE_SELL else tick.ask)
     intent_id = uuid.uuid4().hex
     comment = mt5_comment_id(gates.comment_prefix, intent_id, max_comment=gates.max_comment)
+    theoretical_close_price = round_price(price, tick_size)
+    open_price = _safe_float(position.price_open if position is not None else 0.0)
+    open_volume = _safe_float(volume)
+    open_type = getattr(position, "type", mt5.POSITION_TYPE_BUY) if position is not None else mt5.POSITION_TYPE_BUY
+    open_sl = _safe_float(getattr(position, "sl", 0.0))
+    open_tp = _safe_float(getattr(position, "tp", 0.0))
+    check_from = datetime.now(timezone.utc) - timedelta(seconds=5)
     request = {
         "action": mt5.TRADE_ACTION_DEAL,
         "symbol": symbol,
         "volume": volume,
         "type": close_type,
         "position": ticket,
-        "price": round_price(price, tick_size),
+        "price": theoretical_close_price,
         "deviation": gates.deviation_points,
         "magic": int(gates.magic),
         "comment": comment,
@@ -1145,6 +1258,30 @@ def close_position_once(
         gates.order_confirm_poll_interval_seconds,
     )
     status = "close_confirmed" if closed else "close_not_confirmed"
+    close_deal = lookup_close_deal(mt5, symbol, ticket, check_from) if closed else None
+    actual_close_price = close_deal.get("price", "") if close_deal else ""
+    exit_slippage_points: float | str = ""
+    if actual_close_price != "" and point > 0:
+        exit_slippage_points = abs(_safe_float(actual_close_price) - theoretical_close_price) / point
+    theoretical_pnl_cash = estimate_cash_pnl(
+        mt5,
+        symbol,
+        open_type,
+        open_price,
+        _safe_float(theoretical_close_price),
+        open_volume,
+    )
+    actual_net_profit = None
+    actual_commission = None
+    actual_fee = None
+    actual_swap = None
+    if close_deal:
+        actual_net_profit = _safe_float(close_deal.get("profit", 0.0)) + _safe_float(close_deal.get("commission", 0.0)) + _safe_float(
+            close_deal.get("swap", 0.0)
+        ) + _safe_float(close_deal.get("fee", 0.0))
+        actual_commission = close_deal.get("commission", "")
+        actual_fee = close_deal.get("fee", "")
+        actual_swap = close_deal.get("swap", "")
     summary = {
         "intent_id": intent_id,
         "status": status,
@@ -1156,6 +1293,22 @@ def close_position_once(
         "volume": volume,
         "comment": comment,
         "ticket": ticket,
+        "theoretical_entry_price": open_price if open_price else "",
+        "actual_open_price": open_price if open_price else "",
+        "theoretical_sl_price": open_sl,
+        "theoretical_tp_price": open_tp,
+        "actual_sl": "",
+        "actual_tp": "",
+        "theoretical_close_price": theoretical_close_price,
+        "actual_close_price": actual_close_price,
+        "actual_commission": actual_commission,
+        "actual_fee": actual_fee,
+        "actual_swap": actual_swap,
+        "actual_net_profit": actual_net_profit,
+        "theoretical_pnl_cash": theoretical_pnl_cash,
+        "pnl_delta_cash": "" if (actual_net_profit is None or theoretical_pnl_cash is None) else (actual_net_profit - theoretical_pnl_cash),
+        "entry_slippage_points": "",
+        "exit_slippage_points": exit_slippage_points,
     }
     if intent_journal is not None:
         append_jsonl(intent_journal, summary)

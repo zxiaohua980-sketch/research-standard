@@ -9,7 +9,7 @@ description: Package, audit, or document MT5 Python runtime monitors as minimal 
 
 Use this as an operational packaging skill, not as a strategy-validation skill.
 
-Before touching a trading runtime, obey the project `AGENTS.md` and registry. State the strategy stage, whether code/parameter changes are allowed, whether execution audit is required, and whether the work can contaminate forward-live results. Never enable REAL-account trading unless the user explicitly authorizes this exact runtime and the config satisfies the `live_trade` gates; never set `framework_start_time` silently or treat demo/runtime logs as OOS-Final evidence.
+Before touching a trading runtime, obey the project `AGENTS.md` and registry. State the strategy stage, whether code/parameter changes are allowed, whether execution audit is required, and whether the work can contaminate forward-live results. Never enable REAL-account trading unless the user explicitly authorizes this exact runtime; never set `framework_start_time` silently or treat demo/runtime logs as OOS-Final evidence.
 
 ## Workflow
 
@@ -146,9 +146,9 @@ Keep old BAT names only as development/legacy wrappers if users already have sho
 - duplicate-signal prevention: `signal_execution_ledger_path`, `signal_key_fields`, `consume_signal_before_order_send=true`, `block_duplicate_signal_bar=true`;
 - reconciliation: `reconcile_on_startup`, `reconcile_each_cycle`, `recovery_lookback_days`, `history_future_buffer_hours`, `order_confirm_timeout_seconds`, `order_confirm_poll_interval_seconds`, `unknown_freeze_new_orders`;
 - logging: `log_dir=.\logs`, `runtime_log_enabled`, `error_log_enabled`, `reconciliation_log_enabled`, `order_journal_enabled`, `position_snapshot_enabled`;
-- safety: `kill_switch`, `allow_demo_trade`, `allow_live_trade`, `live_trade_ack`, `dry_run_enforce`.
+- safety: `kill_switch`, `allow_demo_trade`, `dry_run_enforce`.
 
-The account type is read and printed from MT5 at runtime. Do not infer DEMO/REAL safety from the EXE filename or BAT name. Trading permission is the intersection of MT5 account state, config gates, and project policy. REAL is allowed only under explicit `live_trade` authorization, not by accident.
+The account type is read and printed from MT5 at runtime. Do not infer DEMO/REAL safety from the EXE filename or BAT name. Trading permission is the intersection of MT5 account state, explicit user intention, and project policy. `allow_live_trade` and `live_trade_ack` are legacy compatibility knobs, not primary gates.
 
 ## Packaging And Concurrency Profile Contract
 
@@ -609,7 +609,7 @@ background_worker_threads = 0
 single_instance_guard = true
 single_instance_scope = exe_path
 allow_demo_trade = false
-allow_live_trade = false
+# allow_live_trade = false  ; legacy compatibility, optional
 dry_run_enforce = true
 kill_switch = false
 risk_cash_per_order = 100
@@ -670,7 +670,7 @@ background_worker_threads = 0
 single_instance_guard = true
 single_instance_scope = exe_path
 allow_demo_trade = true
-allow_live_trade = false
+# allow_live_trade = false  ; legacy compatibility, optional
 dry_run_enforce = false
 kill_switch = false
 order_enabled = true
@@ -716,15 +716,15 @@ terminal_path =
 environment_id = demo
 ```
 
-For the demo profile, direct EXE startup should show a clear `DEMO_ORDER_ENABLED` state when the account and config allow it. Any optional BAT wrapper must preserve the same behavior as launching the EXE directly. REAL accounts are allowed only through an explicit user-authorized live profile, not by default.
+For the demo profile, direct EXE startup should show a clear `DEMO_ORDER_ENABLED` state when the account and config allow it. Any optional BAT wrapper must preserve the same behavior as launching the EXE directly. LIVE mode uses the same technical checks as demo and an explicit live intention from the runtime profile.
 
 Order methods must require:
 
 - connected account;
-- DEMO/CONTEST account for `demo_trade`, or REAL account only for user-authorized `live_trade`;
+- DEMO/CONTEST account for `demo_trade`, or REAL account for `live_trade`;
 - `trade_allowed=True`;
 - effective CLI/config mode `demo_trade` or `live_trade`;
-- `allow_demo_trade=true` for demo, or `allow_live_trade=true` plus `live_trade_ack=I_ACCEPT_REAL_MONEY_RISK` for live;
+- `allow_demo_trade=true` for demo, or `mode=live_trade` for live.
 - `dry_run_enforce` not blocking;
 - `kill_switch=false`;
 - max-position and max-volume gates for opens;
@@ -740,8 +740,8 @@ hide this behind defaults. The config must make the choice obvious:
 mode = live_trade
 order_enabled = true
 allow_demo_trade = false
-allow_live_trade = true
-live_trade_ack = I_ACCEPT_REAL_MONEY_RISK
+# allow_live_trade = true             ; legacy compatibility only
+# live_trade_ack = I_ACCEPT_REAL_MONEY_RISK ; legacy compatibility only
 kill_switch = false
 dry_run_enforce = false
 expected_account_server =
@@ -765,8 +765,7 @@ unknown_freeze_new_orders = true
 ```
 
 The runtime must print the account server, login, and `trade_mode_label=REAL` before order routing.
-If expected account fields are configured and do not match, block. If `live_trade_ack` is missing,
-block. If startup reconciliation has unknown unresolved state and `unknown_freeze_new_orders=true`,
+If expected account fields are configured and do not match, block. If startup reconciliation has unknown unresolved state and `unknown_freeze_new_orders=true`,
 block new opens. Stage paperwork is evidence quality; it is not a substitute for these concrete
 runtime gates and it must not mechanically override the user's explicit capital decision.
 
@@ -792,6 +791,37 @@ Require by default:
 - delete per-scan OHLC/ZigZag temp folders after each scan unless a troubleshooting config explicitly keeps them;
 - default `write_timestamped_scan_files=false`, `write_full_trade_history=false`, `write_fail_reasons=false`, `keep_scan_tmp_files=false`;
 - document every config switch that can increase disk usage and turn it off again for continuous monitoring.
+
+#### Required Execution Reconciliation Fields
+
+For every open/close attempt, lifecycle rows **must** include a reconciliation payload with:
+
+- intent and identity: `intent_id`, `signal_key`, `status`, `action`, `symbol`, `side`, `volume`, `request`, `magic`, `comment`, `ticket`/`actual_position_ticket`
+- execution prices:
+  - open: `theoretical_entry_price`, `actual_open_price`, `theoretical_sl_price`, `theoretical_tp_price`, `actual_sl`, `actual_tp`
+  - close: `theoretical_close_price`, `actual_close_price`
+- cost and risk: `actual_commission`, `actual_fee`, `actual_swap` (if available)
+- P/L and slippage audit:
+  - `theoretical_pnl_cash`
+  - `actual_net_profit`
+  - `pnl_delta_cash` (`actual_net_profit - theoretical_pnl_cash`)
+  - `entry_slippage_points`
+  - `exit_slippage_points`
+
+If actual values are not yet resolvable, write explicit empty values and `status` for follow-up reconciliation.  
+**Do not write missing actual values as 0.**
+
+Minimal reconciliation output line schema:
+
+```text
+ts_utc,intent_id,status,action,symbol,side,volume,theoretical_entry_price,actual_open_price,theoretical_close_price,actual_close_price,theoretical_sl_price,actual_sl,theoretical_tp_price,actual_tp,entry_slippage_points,exit_slippage_points,actual_commission,actual_fee,actual_swap,theoretical_pnl_cash,actual_net_profit,pnl_delta_cash,magic,comment,ticket,actual_position_ticket,request
+```
+
+For every closed trade row, runtime should be able to print:
+- 1) theoretical open fill price vs actual open fill price
+- 2) theoretical close price vs actual close price
+- 3) theoretical gross P/L vs actual net P/L
+- 4) slippage points (entry/exit) from the same point unit
 
 Do not make demo order execution depend on re-reading a freshly rewritten `realtime_latest_signals.csv`. Use the current scan result in memory, and treat files as audit outputs.
 
@@ -842,7 +872,7 @@ Every runtime that can send demo orders should include:
 On monitor startup, do this before scanning for new signals:
 
 1. Connect or reconnect to MT5; if initialize/terminal_info fails, enter safe mode and do not send orders.
-2. Reject REAL accounts unless `mode=live_trade`, `allow_live_trade=true`, `live_trade_ack=I_ACCEPT_REAL_MONEY_RISK`, and the user explicitly authorized live use.
+2. Reject REAL accounts unless `mode=live_trade`, and the user explicitly authorized live use.
 3. Load local intent journal if present; ignore or quarantine corrupt partial records.
 4. Query `positions_get()` and filter by magic number.
 5. Query `orders_get()` and filter pending orders by magic number.
